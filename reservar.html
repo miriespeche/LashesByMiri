@@ -1,0 +1,111 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>LASHSTUDIOBYMIRI | Reservar Turno</title>
+  <meta name="description" content="Reserva tu turno en LASHSTUDIOBYMIRI. Elegí el día y horario que mejor te quede.">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Cormorant+Garamond:wght@500;600;700&family=Manrope:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+  <link rel="stylesheet" href="style.css">
+</head>
+<body data-page="reservar">
+  <div class="site-shell">
+    <header class="header">
+      <div class="container header-bar">
+        <a class="brand" href="index.html" aria-label="Ir al inicio de LASHSTUDIOBYMIRI">
+          <span class="brand-mark">LM</span>
+          <span class="brand-copy">
+            <strong>LASHSTUDIOBYMIRI</strong>
+            <small>Beauty studio premium</small>
+          </span>
+        </a>
+
+        <button class="menu-toggle" type="button" aria-expanded="false" aria-controls="main-nav" aria-label="Abrir menú">
+          <span></span>
+          <span></span>
+          <span></span>
+        </button>
+
+        <nav class="nav" id="main-nav">
+          <a data-nav="inicio" href="index.html">Inicio</a>
+          <a data-nav="servicios" href="servicios.html">Servicios</a>
+          <a data-nav="galeria" href="galeria.html">Galería</a>
+          <a data-nav="opiniones" href="opiniones.html">Opiniones</a>
+          <a data-nav="contacto" href="contacto.html">Contacto</a>
+          <a class="button button-primary" href="reservar.html">Reservar turno</a>
+        </nav>
+      </div>
+    </header>
+
+    <main>
+      <section class="page-hero">
+        <div class="container page-hero-content reveal">
+          <span class="eyebrow">Reservas</span>
+          <h1>Agendá tu cita</h1>
+          <p>Elegí el día y el horario que prefieras. Una vez seleccionado, procederás al pago de la seña para confirmar tu lugar.</p>
+        </div>
+      </section>
+
+      <section class="section">
+        <div class="container">
+          <div class="booking-container reveal">
+            <div class="calendar-wrapper">
+              <div class="calendar-header">
+                <button id="prevMonth">&lt;</button>
+                <h2 id="currentMonth">Mes Año</h2>
+                <button id="nextMonth">&gt;</button>
+              </div>
+              <div class="calendar-grid" id="calendarGrid">
+                <!-- Los días se generarán con JS -->
+              </div>
+            </div>
+
+            <div class="slots-wrapper" id="slotsContainer" style="display: none;">
+              <h3>Horarios disponibles para el <span id="selectedDateText">--/--</span></h3>
+              <div class="slots-grid" id="slotsGrid">
+                <!-- Los horarios se generarán con JS -->
+              </div>
+            </div>
+
+            <div class="booking-summary" id="bookingSummary" style="display: none;">
+              <h3>Resumen de tu reserva</h3>
+              <p>Día: <strong id="summaryDate"></strong></p>
+              <p>Horario: <strong id="summaryTime"></strong></p>
+              <p class="summary-note">Para confirmar el turno, es necesario realizar el pago de la seña a través de Mercado Pago.</p>
+              <button class="button button-primary" id="confirmBooking">Pagar y Confirmar por WhatsApp</button>
+            </div>
+          </div>
+        </div>
+      </section>
+    </main>
+
+    <footer class="footer">
+      <div class="container footer-grid">
+        <div>
+          <strong class="footer-brand">LASHSTUDIOBYMIRI</strong>
+          <p>Estudio de extensiones de pestañas con estética femenina, moderna y enfoque premium.</p>
+        </div>
+        <div>
+          <span class="footer-label">Redes sociales</span>
+          <div class="social-links">
+            <a href="https://instagram.com/" target="_blank" rel="noreferrer">Instagram</a>
+            <a href="https://facebook.com/" target="_blank" rel="noreferrer">Facebook</a>
+            <a href="https://tiktok.com/" target="_blank" rel="noreferrer">TikTok</a>
+          </div>
+        </div>
+        <div>
+          <span class="footer-label">Ubicación</span>
+          <p>Buenos Aires, Argentina</p>
+        </div>
+      </div>
+      <div class="container footer-bottom">
+        <span>© 2026 LASHSTUDIOBYMIRI. Todos los derechos reservados.</span>
+      </div>
+    </footer>
+  </div>
+
+  <script src="script.js"></script>
+</body>
+</html>
