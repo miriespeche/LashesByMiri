@@ -306,6 +306,13 @@ const injectAdminUI = () => {
         <h2>MiriAdmin Panel</h2>
         
         <div class="admin-section">
+          <h3>Sincronización con GitHub</h3>
+          <p>Para que tus cambios (textos, fotos, configuración) se vean en internet para todos, debes descargar el archivo de cambios y subirlo a tu repositorio de GitHub.</p>
+          <button class="button button-secondary btn-save-all" id="adminDownloadChanges">Descargar Archivo de Cambios</button>
+          <p style="font-size:0.8rem; margin-top:10px;">⚠️ Nota: Luego sube este archivo a GitHub con el nombre <code>miri_data.json</code> en la misma carpeta que tus otros archivos.</p>
+        </div>
+
+        <div class="admin-section">
           <h3>Edición de Contenido Visual</h3>
           <p>Haz clic en el botón de abajo para activar el modo de edición. Podrás escribir directamente sobre los textos de la página y cambiar imágenes.</p>
           <button class="button button-primary btn-save-all" id="adminEnableEdit">Activar Modo Edición</button>
@@ -352,6 +359,34 @@ const injectAdminUI = () => {
   const adminClose = document.getElementById("adminClose");
   const adminSaveBtn = document.getElementById("adminSaveConfig");
   const adminEnableEditBtn = document.getElementById("adminEnableEdit");
+  const adminDownloadBtn = document.getElementById("adminDownloadChanges");
+
+  if (adminDownloadBtn) {
+    adminDownloadBtn.addEventListener("click", () => {
+      const allData = {
+        config: {
+          wa: WHATSAPP_NUMBER,
+          mp: MERCADO_PAGO_LINK
+        },
+        bookings: JSON.parse(localStorage.getItem("bookedSlots") || "{}"),
+        changes: {}
+      };
+      
+      // Recopilar todos los cambios de todas las páginas posibles
+      ['inicio', 'servicios', 'galeria', 'opiniones', 'contacto', 'reservar', 'global'].forEach(p => {
+        const saved = localStorage.getItem(`miri_changes_${p}`);
+        if (saved) allData.changes[p] = JSON.parse(saved);
+      });
+
+      const blob = new Blob([JSON.stringify(allData, null, 2)], { type: "application/json" });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url;
+      a.download = "miri_data.json";
+      a.click();
+      URL.revokeObjectURL(url);
+    });
+  }
 
   if (adminClose) {
     adminClose.addEventListener("click", () => {
@@ -640,7 +675,34 @@ const applySavedChanges = () => {
 };
 
 // Aplicar cambios al cargar cualquier página
-document.addEventListener('DOMContentLoaded', applySavedChanges);
+document.addEventListener('DOMContentLoaded', () => {
+  // Primero intentar cargar desde archivo JSON externo (GitHub)
+  fetch('miri_data.json')
+    .then(response => response.json())
+    .then(data => {
+      if (data) {
+        // Sincronizar localStorage con los datos del archivo si son más recientes o no existen
+        if (data.config) {
+          if (data.config.wa) localStorage.setItem("miri_wa_number", data.config.wa);
+          if (data.config.mp) localStorage.setItem("miri_mp_link", data.config.mp);
+        }
+        if (data.bookings) {
+          localStorage.setItem("bookedSlots", JSON.stringify(data.bookings));
+        }
+        if (data.changes) {
+          Object.keys(data.changes).forEach(p => {
+            localStorage.setItem(`miri_changes_${p}`, JSON.stringify(data.changes[p]));
+          });
+        }
+        // Aplicar los cambios después de sincronizar
+        applySavedChanges();
+      }
+    })
+    .catch(err => {
+      console.log("No se encontró miri_data.json o error al cargar, usando datos locales.");
+      applySavedChanges();
+    });
+});
 
 const renderAdminBookings = () => {
   const adminBookingsTable = document.getElementById("adminBookingsTable");
