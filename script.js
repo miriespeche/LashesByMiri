@@ -520,9 +520,15 @@ const enableVisualEditing = () => {
           isBg = true;
         }
 
-        const currentSrc = isBg ? 
-          getComputedStyle(targetEl).backgroundImage.slice(5, -2).replace(/"/g, "") : 
-          targetEl.src;
+        let currentSrc = "";
+        if (isBg) {
+          const bgImg = getComputedStyle(targetEl).backgroundImage;
+          // Extraer URL de la cadena (puede tener gradientes)
+          const urlMatch = bgImg.match(/url\(["']?(.*?)["']?\)/);
+          currentSrc = urlMatch ? urlMatch[1] : "";
+        } else {
+          currentSrc = targetEl.src;
+        }
 
         // Crear un input de archivo oculto para permitir subir desde la PC
         const fileInput = document.createElement('input');
@@ -543,7 +549,14 @@ const enableVisualEditing = () => {
           reader.onload = event => {
             const newSrc = event.target.result;
             if (isBg) {
-              targetEl.style.backgroundImage = `url("${newSrc}")`;
+              // Mantener el gradiente si existe
+              const currentBg = getComputedStyle(targetEl).backgroundImage;
+              if (currentBg.includes('gradient')) {
+                const gradientPart = currentBg.split('url(')[0];
+                targetEl.style.backgroundImage = `${gradientPart}url("${newSrc}")`;
+              } else {
+                targetEl.style.backgroundImage = `url("${newSrc}")`;
+              }
               targetEl.style.backgroundSize = 'cover';
               targetEl.style.backgroundPosition = 'center';
             } else {
@@ -560,7 +573,13 @@ const enableVisualEditing = () => {
           const newUrl = prompt("Ingresa la URL de la nueva imagen:", currentSrc);
           if (newUrl) {
             if (isBg) {
-              targetEl.style.backgroundImage = `url("${newUrl}")`;
+              const currentBg = getComputedStyle(targetEl).backgroundImage;
+              if (currentBg.includes('gradient')) {
+                const gradientPart = currentBg.split('url(')[0];
+                targetEl.style.backgroundImage = `${gradientPart}url("${newUrl}")`;
+              } else {
+                targetEl.style.backgroundImage = `url("${newUrl}")`;
+              }
               targetEl.style.backgroundSize = 'cover';
               targetEl.style.backgroundPosition = 'center';
             } else {
@@ -631,7 +650,14 @@ const saveAllChanges = () => {
       isBg = true;
     }
 
-    const src = isBg ? getComputedStyle(targetEl).backgroundImage.slice(5, -2).replace(/"/g, "") : targetEl.src;
+    let src = "";
+    if (isBg) {
+      const bgImg = getComputedStyle(targetEl).backgroundImage;
+      const urlMatch = bgImg.match(/url\(["']?(.*?)["']?\)/);
+      src = urlMatch ? urlMatch[1] : "";
+    } else {
+      src = targetEl.src;
+    }
     
     changes.images.push({
       src: src,
@@ -671,7 +697,14 @@ const applySavedChanges = () => {
     if (el) {
       const internalImg = el.querySelector('img');
       if (item.isBg) {
-        el.style.backgroundImage = `url("${item.src}")`;
+        // Preservar el gradiente original del CSS
+        const currentBg = getComputedStyle(el).backgroundImage;
+        if (currentBg.includes('gradient')) {
+          const gradientPart = currentBg.split('url(')[0];
+          el.style.backgroundImage = `${gradientPart}url("${item.src}")`;
+        } else {
+          el.style.backgroundImage = `url("${item.src}")`;
+        }
         el.style.backgroundSize = 'cover';
         el.style.backgroundPosition = 'center';
       } else {
