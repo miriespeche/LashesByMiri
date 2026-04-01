@@ -311,7 +311,10 @@ const injectAdminUI = () => {
         <div class="admin-section">
           <h3>Sincronización con GitHub</h3>
           <p>Para que tus cambios (textos, fotos, configuración) se vean en internet para todos, debes descargar el archivo de cambios y subirlo a tu repositorio de GitHub.</p>
-          <button class="button button-secondary btn-save-all" id="adminDownloadChanges">Descargar Archivo de Cambios</button>
+          <div style="display:flex; gap:10px;">
+            <button class="button button-secondary" id="adminDownloadChanges">Descargar Archivo de Cambios</button>
+            <button class="button" id="adminResetLocal" style="background:#fef2f2; color:#e53e3e; border:1px solid #fee2e2;">Borrar Cambios Locales</button>
+          </div>
           <p style="font-size:0.8rem; margin-top:10px;">⚠️ Nota: Luego sube este archivo a GitHub con el nombre <code>miri_data.json</code> en la misma carpeta que tus otros archivos.</p>
         </div>
 
@@ -363,6 +366,21 @@ const injectAdminUI = () => {
   const adminSaveBtn = document.getElementById("adminSaveConfig");
   const adminEnableEditBtn = document.getElementById("adminEnableEdit");
   const adminDownloadBtn = document.getElementById("adminDownloadChanges");
+  const adminResetBtn = document.getElementById("adminResetLocal");
+
+  if (adminResetBtn) {
+    adminResetBtn.addEventListener("click", () => {
+      if (confirm("¿Estás segura? Esto borrará todos los cambios que hiciste en esta PC y restaurará el diseño original. No afecta a lo que ya subiste a GitHub.")) {
+        // Borrar cambios de todas las páginas del localStorage
+        ['inicio', 'servicios', 'galeria', 'opiniones', 'contacto', 'reservar', 'global'].forEach(p => {
+          localStorage.removeItem(`miri_changes_${p}`);
+        });
+        localStorage.removeItem("miri_wa_number");
+        localStorage.removeItem("miri_mp_link");
+        location.reload();
+      }
+    });
+  }
 
   if (adminDownloadBtn) {
     adminDownloadBtn.addEventListener("click", () => {
