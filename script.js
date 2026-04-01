@@ -311,9 +311,9 @@ const injectAdminUI = () => {
         <div class="admin-section">
           <h3>Sincronización con GitHub</h3>
           <p>Para que tus cambios (textos, fotos, configuración) se vean en internet para todos, debes descargar el archivo de cambios y subirlo a tu repositorio de GitHub.</p>
-          <div style="display:flex; gap:10px;">
+          <div style="display:flex; gap:10px; flex-wrap:wrap;">
             <button class="button button-secondary" id="adminDownloadChanges">Descargar Archivo de Cambios</button>
-            <button class="button" id="adminResetLocal" style="background:#fef2f2; color:#e53e3e; border:1px solid #fee2e2;">Borrar Cambios Locales</button>
+            <button class="button" id="adminResetLocal" style="background:#e53e3e; color:white; border:none; padding: 0.8rem 1.5rem; border-radius: 12px; font-weight: bold; cursor: pointer;">Borrar Cambios Locales (Reiniciar PC)</button>
           </div>
           <p style="font-size:0.8rem; margin-top:10px;">⚠️ Nota: Luego sube este archivo a GitHub con el nombre <code>miri_data.json</code> en la misma carpeta que tus otros archivos.</p>
         </div>
@@ -623,39 +623,54 @@ const enableVisualEditing = () => {
   });
 };
 
+// --- Funciones de utilidad para edición precisa ---
+const getElementPath = (el) => {
+  const path = [];
+  while (el && el.nodeType === Node.ELEMENT_NODE) {
+    let selector = el.nodeName.toLowerCase();
+    if (el.id) {
+      selector += '#' + el.id;
+      path.unshift(selector);
+      break;
+    } else {
+      let sib = el, nth = 1;
+      while (sib = sib.previousElementSibling) {
+        if (sib.nodeName.toLowerCase() == selector) nth++;
+      }
+      if (nth != 1) selector += ":nth-of-type("+nth+")";
+    }
+    path.unshift(selector);
+    el = el.parentNode;
+  }
+  return path.join(" > ");
+};
+
 const saveAllChanges = () => {
   const pageId = currentPage || 'global';
   const changes = {
-    texts: [],
-    images: []
+    texts: {},
+    images: {}
   };
 
-  // Guardar textos usando selectores más específicos para evitar desorden
   const tagsToEdit = 'p, h1, h2, h3, span, strong, small, .eyebrow, .button, .service-price, .testimonial strong';
   document.querySelectorAll(tagsToEdit).forEach((el) => {
     if (!el.closest('.admin-overlay') && !el.closest('.nav')) {
-      // Limpiar el contenido de atributos de edición antes de guardar
+      const path = getElementPath(el);
+      // Limpiar rastro de edición
       const cleanHTML = el.innerHTML
-        .replace(/contenteditable="true"/g, '')
-        .replace(/contenteditable="false"/g, '')
-        .replace(/contenteditable=""/g, '')
-        .replace(/contenteditable/g, '')
+        .replace(/contenteditable="[^"]*?"/g, '')
+        .replace(/spellcheck="[^"]*?"/g, '')
         .replace(/style="[^"]*?outline[^"]*?"/g, '')
         .replace(/style="[^"]*?border[^"]*?"/g, '')
         .replace(/class="[^"]*?editable-img[^"]*?"/g, '')
         .trim();
-        
-      changes.texts.push({
-        tag: el.tagName.toLowerCase(),
-        class: el.className,
-        parentClass: el.parentElement.className,
-        content: cleanHTML
-      });
+      
+      changes.texts[path] = cleanHTML;
     }
   });
 
-  // Guardar imágenes
   document.querySelectorAll('.editable-img').forEach((el) => {
+    const path = getElementPath(el);
     let targetEl = el;
     let isBg = false;
     
@@ -677,11 +692,7 @@ const saveAllChanges = () => {
       src = targetEl.src;
     }
     
-    changes.images.push({
-      src: src,
-      isBg: isBg,
-      parentClass: el.parentElement.className
-    });
+    changes.images[path] = { src, isBg };
   });
 
   localStorage.setItem(`miri_changes_${pageId}`, JSON.stringify(changes));
@@ -692,48 +703,45 @@ const applySavedChanges = () => {
   const saved = localStorage.getItem(`miri_changes_${pageId}`);
   if (!saved) return;
 
-  const changes = JSON.parse(saved);
+  const data = JSON.parse(saved);
 
-  // Aplicar textos buscando coincidencias por estructura para evitar que se mueva todo
-  const tagsToEdit = 'p, h1, h2, h3, span, strong, small, .eyebrow, .button, .service-price, .testimonial strong';
-  const textElements = Array.from(document.querySelectorAll(tagsToEdit))
-    .filter(el => !el.closest('.admin-overlay') && !el.closest('.nav'));
-  
-  changes.texts.forEach((item, index) => {
-    const el = textElements[index];
-    if (el && el.tagName.toLowerCase() === item.tag) {
-      el.innerHTML = item.content;
-    }
-  });
+  // Aplicar textos por su camino exacto (Path)
+  if (data.texts) {
+    Object.keys(data.texts).forEach(path => {
+      const el = document.querySelector(path);
+      if (el) {
+        el.innerHTML = data.texts[path];
+      }
+    });
+  }
 
-  // Aplicar imágenes
-  const elementsWithImages = Array.from(document.querySelectorAll('img, .hero-backdrop, .gallery-item'))
-    .filter(el => !el.closest('.admin-overlay'));
-    
-  changes.images.forEach((item, index) => {
-    const el = elementsWithImages[index];
-    if (el) {
-      const internalImg = el.querySelector('img');
-      if (item.isBg) {
-        // Preservar el gradiente original del CSS
-        const currentBg = getComputedStyle(el).backgroundImage;
-        if (currentBg.includes('gradient')) {
-          const gradientPart = currentBg.split('url(')[0];
-          el.style.backgroundImage = `${gradientPart}url("${item.src}")`;
+  // Aplicar imágenes por su camino exacto
+  if (data.images) {
+    Object.keys(data.images).forEach(path => {
+      const el = document.querySelector(path);
+      const item = data.images[path];
+      if (el) {
+        if (item.isBg) {
+          const currentBg = getComputedStyle(el).backgroundImage;
+          if (currentBg.includes('gradient')) {
+            const gradientPart = currentBg.split('url(')[0];
+            el.style.backgroundImage = `${gradientPart}url("${item.src}")`;
+          } else {
+            el.style.backgroundImage = `url("${item.src}")`;
+          }
+          el.style.backgroundSize = 'cover';
+          el.style.backgroundPosition = 'center';
         } else {
-          el.style.backgroundImage = `url("${item.src}")`;
-        }
-        el.style.backgroundSize = 'cover';
-        el.style.backgroundPosition = 'center';
-      } else {
-        if (el.tagName.toLowerCase() === 'img') {
-          el.src = item.src;
-        } else if (internalImg) {
-          internalImg.src = item.src;
+          const internalImg = el.querySelector('img');
+          if (el.tagName.toLowerCase() === 'img') {
+            el.src = item.src;
+          } else if (internalImg) {
+            internalImg.src = item.src;
+          }
         }
       }
-    }
-  });
+    });
+  }
 };
 
 // Aplicar cambios al cargar cualquier página
