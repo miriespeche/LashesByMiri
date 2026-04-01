@@ -600,7 +600,11 @@ const saveAllChanges = () => {
       // Limpiar el contenido de atributos de edición antes de guardar
       const cleanHTML = el.innerHTML
         .replace(/contenteditable="true"/g, '')
+        .replace(/contenteditable="false"/g, '')
         .replace(/contenteditable=""/g, '')
+        .replace(/contenteditable/g, '')
+        .replace(/style="[^"]*?outline[^"]*?"/g, '')
+        .replace(/style="[^"]*?border[^"]*?"/g, '')
         .replace(/class="[^"]*?editable-img[^"]*?"/g, '')
         .trim();
         

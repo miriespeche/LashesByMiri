@@ -1182,6 +1182,16 @@ body:not(.editing-mode) .editable-img {
   cursor: inherit !important;
 }
 
+/* Específicamente para el cuadro rosa que mencionas */
+body:not(.editing-mode) .about-card h3,
+body:not(.editing-mode) .service-card h3,
+body:not(.editing-mode) h1,
+body:not(.editing-mode) h2,
+body:not(.editing-mode) h3 {
+  outline: none !important;
+  border: none !important;
+}
+
 .editing-mode .brand-copy strong[contenteditable="true"], 
 .editing-mode .brand-copy small[contenteditable="true"] {
   display: block !important;
