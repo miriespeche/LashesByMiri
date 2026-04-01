@@ -500,7 +500,10 @@ button {
   margin: 0;
   font-family: "Cormorant Garamond", serif;
   font-size: 2rem;
-  line-height: 1;
+  line-height: 1.1;
+  overflow-wrap: break-word;
+  word-wrap: break-word;
+  hyphens: auto;
 }
 
 .service-price {
@@ -644,7 +647,11 @@ button {
 }
 
 .about-card {
-  padding: 1.5rem;
+  padding: 1.6rem;
+  display: flex;
+  flex-direction: column;
+  gap: 0.8rem;
+  min-height: 100%;
   transition: transform 0.25s ease, box-shadow 0.25s ease;
 }
 
@@ -1297,6 +1304,10 @@ body:not(.editing-mode) .editable-img {
 }
 
 @media (max-width: 860px) {
+  .service-card h3,
+  .about-card h3 {
+    font-size: 1.75rem;
+  }
   .menu-toggle {
     display: inline-flex;
   }
