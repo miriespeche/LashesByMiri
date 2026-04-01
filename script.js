@@ -695,7 +695,12 @@ const saveAllChanges = () => {
     changes.images[path] = { src, isBg };
   });
 
-  localStorage.setItem(`miri_changes_${pageId}`, JSON.stringify(changes));
+  try {
+    localStorage.setItem(`miri_changes_${pageId}`, JSON.stringify(changes));
+  } catch (e) {
+    console.error("Error al guardar en localStorage:", e);
+    alert("No se pudieron guardar todos los cambios porque las imágenes son demasiado pesadas. Por favor, intenta usar imágenes más pequeñas (menos de 1MB).");
+  }
 };
 
 const applySavedChanges = () => {
@@ -708,38 +713,42 @@ const applySavedChanges = () => {
   // Aplicar textos por su camino exacto (Path)
   if (data.texts) {
     Object.keys(data.texts).forEach(path => {
-      const el = document.querySelector(path);
-      if (el) {
-        el.innerHTML = data.texts[path];
-      }
+      try {
+        const el = document.querySelector(path);
+        if (el) {
+          el.innerHTML = data.texts[path];
+        }
+      } catch (e) { console.warn("No se pudo aplicar texto en path:", path); }
     });
   }
 
   // Aplicar imágenes por su camino exacto
   if (data.images) {
     Object.keys(data.images).forEach(path => {
-      const el = document.querySelector(path);
-      const item = data.images[path];
-      if (el) {
-        if (item.isBg) {
-          const currentBg = getComputedStyle(el).backgroundImage;
-          if (currentBg.includes('gradient')) {
-            const gradientPart = currentBg.split('url(')[0];
-            el.style.backgroundImage = `${gradientPart}url("${item.src}")`;
+      try {
+        const el = document.querySelector(path);
+        const item = data.images[path];
+        if (el) {
+          if (item.isBg) {
+            const currentBg = getComputedStyle(el).backgroundImage;
+            if (currentBg.includes('gradient')) {
+              const gradientPart = currentBg.split('url(')[0];
+              el.style.backgroundImage = `${gradientPart}url("${item.src}")`;
+            } else {
+              el.style.backgroundImage = `url("${item.src}")`;
+            }
+            el.style.backgroundSize = 'cover';
+            el.style.backgroundPosition = 'center';
           } else {
-            el.style.backgroundImage = `url("${item.src}")`;
-          }
-          el.style.backgroundSize = 'cover';
-          el.style.backgroundPosition = 'center';
-        } else {
-          const internalImg = el.querySelector('img');
-          if (el.tagName.toLowerCase() === 'img') {
-            el.src = item.src;
-          } else if (internalImg) {
-            internalImg.src = item.src;
+            const internalImg = el.querySelector('img');
+            if (el.tagName.toLowerCase() === 'img') {
+              el.src = item.src;
+            } else if (internalImg) {
+              internalImg.src = item.src;
+            }
           }
         }
-      }
+      } catch (e) { console.warn("No se pudo aplicar imagen en path:", path); }
     });
   }
 };
