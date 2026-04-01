@@ -1,0 +1,6 @@
+# Archivos locales de configuración y cambios
+miri_changes_*.json
+.DS_Store
+Thumbs.db
+node_modules/
+.vscode/

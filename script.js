@@ -483,7 +483,7 @@ const enableVisualEditing = () => {
         }
 
         const currentSrc = isBg ? 
-          getComputedStyle(targetEl).backgroundImage.slice(5, -2) : 
+          getComputedStyle(targetEl).backgroundImage.slice(5, -2).replace(/"/g, "") : 
           targetEl.src;
 
         // Crear un input de archivo oculto para permitir subir desde la PC
@@ -495,11 +495,19 @@ const enableVisualEditing = () => {
           const file = ev.target.files[0];
           if (!file) return;
 
+          // Validar tamaño (localStorage tiene límite de ~5MB total)
+          if (file.size > 1.5 * 1024 * 1024) {
+            alert("La imagen es muy pesada. Por favor elige una de menos de 1.5MB para que se pueda guardar correctamente.");
+            return;
+          }
+
           const reader = new FileReader();
           reader.onload = event => {
             const newSrc = event.target.result;
             if (isBg) {
               targetEl.style.backgroundImage = `url("${newSrc}")`;
+              targetEl.style.backgroundSize = 'cover';
+              targetEl.style.backgroundPosition = 'center';
             } else {
               targetEl.src = newSrc;
             }
@@ -515,6 +523,8 @@ const enableVisualEditing = () => {
           if (newUrl) {
             if (isBg) {
               targetEl.style.backgroundImage = `url("${newUrl}")`;
+              targetEl.style.backgroundSize = 'cover';
+              targetEl.style.backgroundPosition = 'center';
             } else {
               targetEl.src = newUrl;
             }
@@ -557,6 +567,7 @@ const saveAllChanges = () => {
   });
 
   // Guardar imágenes
+  const imagePromises = [];
   document.querySelectorAll('.editable-img').forEach((el, index) => {
     let targetEl = el;
     let isBg = false;
@@ -570,9 +581,11 @@ const saveAllChanges = () => {
       isBg = true;
     }
 
+    const src = isBg ? getComputedStyle(targetEl).backgroundImage.slice(5, -2).replace(/"/g, "") : targetEl.src;
+    
     changes.images.push({
       id: index,
-      src: isBg ? getComputedStyle(targetEl).backgroundImage.slice(5, -2) : targetEl.src,
+      src: src,
       isBg: isBg
     });
   });
@@ -613,6 +626,8 @@ const applySavedChanges = () => {
       const internalImg = el.querySelector('img');
       if (item.isBg) {
         el.style.backgroundImage = `url("${item.src}")`;
+        el.style.backgroundSize = 'cover';
+        el.style.backgroundPosition = 'center';
       } else {
         if (el.tagName.toLowerCase() === 'img') {
           el.src = item.src;
