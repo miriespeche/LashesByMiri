@@ -574,11 +574,14 @@ const enableVisualEditing = () => {
 
   document.getElementById('adminSaveVisual').addEventListener('click', () => {
     saveAllChanges();
+    // Desactivar contenteditable de todos antes de recargar
+    document.querySelectorAll('[contenteditable]').forEach(el => el.contentEditable = "false");
     alert("¡Cambios guardados con éxito!");
     location.reload();
   });
 
   document.getElementById('adminCancelVisual').addEventListener('click', () => {
+    document.querySelectorAll('[contenteditable]').forEach(el => el.contentEditable = "false");
     location.reload();
   });
 };
