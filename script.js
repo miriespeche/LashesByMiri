@@ -271,18 +271,21 @@ if (currentPage === "reservar") {
 
     const dateString = selectedDate.toLocaleDateString("es-ES", { day: "2-digit", month: "2-digit", year: "numeric" });
     
+    // Obtener el servicio de la URL si existe
+    const urlParams = new URLSearchParams(window.location.search);
+    const servicioElegido = urlParams.get('servicio') || "servicio general";
+
     // 1. Guardar en localStorage como reservado (simulación de cierre de horario)
     const bookedSlots = JSON.parse(localStorage.getItem("bookedSlots") || "{}");
     if (!bookedSlots[dateString]) bookedSlots[dateString] = [];
     bookedSlots[dateString].push(selectedTime);
     localStorage.setItem("bookedSlots", JSON.stringify(bookedSlots));
 
-    // 2. Preparar mensaje de WhatsApp
-    const message = `Hola! Quiero confirmar mi turno para el día ${dateString} a las ${selectedTime}. Ya realicé el pago de la seña.`;
+    // 2. Preparar mensaje de WhatsApp con el servicio
+    const message = `Hola! Quiero confirmar mi turno para ${servicioElegido} el día ${dateString} a las ${selectedTime}. Ya realicé el pago de la seña.`;
     const waUrl = buildWaUrl(message);
 
     // 3. Abrir Mercado Pago en una pestaña y WhatsApp en otra (o después)
-    // Para una mejor experiencia, primero abrimos MP y luego redirigimos a WA
     window.open(MERCADO_PAGO_LINK, "_blank");
     
     setTimeout(() => {
