@@ -590,23 +590,28 @@ const saveAllChanges = () => {
     images: []
   };
 
-  // Guardar textos
-  document.querySelectorAll('[contenteditable="true"]').forEach((el, index) => {
-    // Clonar para limpiar sin afectar el DOM actual
-    const clone = el.cloneNode(true);
-    // Remover contenteditable de sí mismo y de cualquier hijo
-    clone.removeAttribute('contenteditable');
-    clone.querySelectorAll('[contenteditable]').forEach(child => child.removeAttribute('contenteditable'));
-    
-    changes.texts.push({
-      id: index,
-      content: clone.innerHTML
-    });
+  // Guardar textos usando selectores más específicos para evitar desorden
+  const tagsToEdit = 'p, h1, h2, h3, span, strong, small, .eyebrow, .button, .service-price, .testimonial strong';
+  document.querySelectorAll(tagsToEdit).forEach((el) => {
+    if (!el.closest('.admin-overlay') && !el.closest('.nav')) {
+      // Limpiar el contenido de atributos de edición antes de guardar
+      const cleanHTML = el.innerHTML
+        .replace(/contenteditable="true"/g, '')
+        .replace(/contenteditable=""/g, '')
+        .replace(/class="[^"]*?editable-img[^"]*?"/g, '')
+        .trim();
+        
+      changes.texts.push({
+        tag: el.tagName.toLowerCase(),
+        class: el.className,
+        parentClass: el.parentElement.className,
+        content: cleanHTML
+      });
+    }
   });
 
   // Guardar imágenes
-  const imagePromises = [];
-  document.querySelectorAll('.editable-img').forEach((el, index) => {
+  document.querySelectorAll('.editable-img').forEach((el) => {
     let targetEl = el;
     let isBg = false;
     
@@ -622,9 +627,9 @@ const saveAllChanges = () => {
     const src = isBg ? getComputedStyle(targetEl).backgroundImage.slice(5, -2).replace(/"/g, "") : targetEl.src;
     
     changes.images.push({
-      id: index,
       src: src,
-      isBg: isBg
+      isBg: isBg,
+      parentClass: el.parentElement.className
     });
   });
 
@@ -638,28 +643,24 @@ const applySavedChanges = () => {
 
   const changes = JSON.parse(saved);
 
-  // Aplicar textos (mismo orden)
+  // Aplicar textos buscando coincidencias por estructura para evitar que se mueva todo
   const tagsToEdit = 'p, h1, h2, h3, span, strong, small, .eyebrow, .button, .service-price, .testimonial strong';
   const textElements = Array.from(document.querySelectorAll(tagsToEdit))
     .filter(el => !el.closest('.admin-overlay') && !el.closest('.nav'));
   
-  changes.texts.forEach(item => {
-    if (textElements[item.id]) {
-      // Limpiar por seguridad cualquier contenteditable que se haya colado
-      let content = item.content;
-      if (typeof content === 'string') {
-        content = content.replace(/contenteditable="true"/g, '').replace(/contenteditable/g, '');
-      }
-      textElements[item.id].innerHTML = content;
+  changes.texts.forEach((item, index) => {
+    const el = textElements[index];
+    if (el && el.tagName.toLowerCase() === item.tag) {
+      el.innerHTML = item.content;
     }
   });
 
-  // Aplicar imágenes (incluyendo fondos e imágenes internas)
+  // Aplicar imágenes
   const elementsWithImages = Array.from(document.querySelectorAll('img, .hero-backdrop, .gallery-item'))
     .filter(el => !el.closest('.admin-overlay'));
     
-  changes.images.forEach(item => {
-    const el = elementsWithImages[item.id];
+  changes.images.forEach((item, index) => {
+    const el = elementsWithImages[index];
     if (el) {
       const internalImg = el.querySelector('img');
       if (item.isBg) {
