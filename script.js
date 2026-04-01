@@ -313,6 +313,7 @@ const injectAdminUI = () => {
           <p>Para que tus cambios (textos, fotos, configuración) se vean en internet para todos, debes descargar el archivo de cambios y subirlo a tu repositorio de GitHub.</p>
           <div style="display:flex; gap:10px; flex-wrap:wrap;">
             <button class="button button-secondary" id="adminDownloadChanges">Descargar Archivo de Cambios</button>
+            <button class="button button-secondary" id="adminSyncFromCloud" style="border-color: #d98aa7; color: #d98aa7;">Cargar desde GitHub (Nube)</button>
             <button class="button" id="adminResetLocal" style="background:#e53e3e; color:white; border:none; padding: 0.8rem 1.5rem; border-radius: 12px; font-weight: bold; cursor: pointer;">Borrar Cambios Locales (Reiniciar PC)</button>
           </div>
           <p style="font-size:0.8rem; margin-top:10px;">⚠️ Nota: Luego sube este archivo a GitHub con el nombre <code>miri_data.json</code> en la misma carpeta que tus otros archivos.</p>
@@ -366,7 +367,16 @@ const injectAdminUI = () => {
   const adminSaveBtn = document.getElementById("adminSaveConfig");
   const adminEnableEditBtn = document.getElementById("adminEnableEdit");
   const adminDownloadBtn = document.getElementById("adminDownloadChanges");
+  const adminSyncBtn = document.getElementById("adminSyncFromCloud");
   const adminResetBtn = document.getElementById("adminResetLocal");
+
+  if (adminSyncBtn) {
+    adminSyncBtn.addEventListener("click", () => {
+      if (confirm("¿Quieres cargar los datos de la nube? Esto podría sobrescribir tus cambios locales si no los has descargado.")) {
+        syncWithCloud(true);
+      }
+    });
+  }
 
   if (adminResetBtn) {
     adminResetBtn.addEventListener("click", () => {
@@ -384,6 +394,11 @@ const injectAdminUI = () => {
 
   if (adminDownloadBtn) {
     adminDownloadBtn.addEventListener("click", () => {
+      // 1. Guardar cambios actuales si el usuario está en modo edición
+      if (document.body.classList.contains('editing-mode')) {
+        saveAllChanges();
+      }
+
       const allData = {
         config: {
           wa: WHATSAPP_NUMBER,
@@ -396,7 +411,11 @@ const injectAdminUI = () => {
       // Recopilar todos los cambios de todas las páginas posibles
       ['inicio', 'servicios', 'galeria', 'opiniones', 'contacto', 'reservar', 'global'].forEach(p => {
         const saved = localStorage.getItem(`miri_changes_${p}`);
-        if (saved) allData.changes[p] = JSON.parse(saved);
+        if (saved) {
+          try {
+            allData.changes[p] = JSON.parse(saved);
+          } catch (e) { console.error("Error al leer cambios de página:", p); }
+        }
       });
 
       const blob = new Blob([JSON.stringify(allData, null, 2)], { type: "application/json" });
@@ -507,48 +526,55 @@ const enableVisualEditing = () => {
   document.body.appendChild(alertBar);
 
   // Hacer editables textos comunes
-  const tagsToEdit = 'p, h1, h2, h3, span, strong, small, .eyebrow, .button, .service-price, .testimonial strong';
+  const tagsToEdit = 'p, h1, h2, h3, span, strong, small, figcaption, .eyebrow, .button, .service-price, .testimonial strong';
   document.querySelectorAll(tagsToEdit).forEach(el => {
-    // No hacer editables elementos del panel admin ni links de navegación
     if (!el.closest('.admin-overlay') && !el.closest('.nav')) {
       el.contentEditable = "true";
     }
   });
 
   // Manejar imágenes normales e imágenes de fondo
-  const elementsWithImages = document.querySelectorAll('img, .hero-backdrop, .gallery-item');
+  const elementsWithImages = document.querySelectorAll('img, .hero-backdrop, .gallery-item, .hero, .page-hero');
   
   elementsWithImages.forEach(el => {
-    if (!el.closest('.admin-overlay')) {
+    if (el.closest('.admin-overlay')) return;
+
+    const isHero = el.classList.contains('hero') || el.classList.contains('page-hero');
+    const backdrop = el.querySelector('.hero-backdrop');
+    const editTarget = (isHero && backdrop) ? backdrop : el;
+    
+    const hasBg = getComputedStyle(editTarget).backgroundImage !== 'none';
+    const isImg = editTarget.tagName.toLowerCase() === 'img';
+    const internalImg = editTarget.querySelector('img');
+
+    if (isImg || hasBg || internalImg) {
       el.classList.add('editable-img');
-      el.addEventListener('click', function changeImg(e) {
+      if (hasBg && !isImg && !internalImg) {
+        el.setAttribute('data-edit-hint', 'Cambiar fondo');
+      }
+
+      el.onclick = (e) => {
+        if (e.target !== el && (e.target.contentEditable === "true" || e.target.closest('.button'))) {
+          return;
+        }
+
         e.preventDefault();
         e.stopPropagation();
         
-        // Determinar qué estamos editando: el elemento mismo, un img interno, o un fondo
-        let targetEl = this;
-        let isBg = false;
-        
-        const internalImg = this.querySelector('img');
-        if (this.tagName.toLowerCase() === 'img') {
-          targetEl = this;
-        } else if (internalImg) {
-          targetEl = internalImg;
-        } else {
-          isBg = true;
-        }
+        let actualTarget = editTarget;
+        if (internalImg) actualTarget = internalImg;
 
         let currentSrc = "";
-        if (isBg) {
-          const bgImg = getComputedStyle(targetEl).backgroundImage;
-          // Extraer URL de la cadena (puede tener gradientes)
+        const isActuallyBg = getComputedStyle(actualTarget).backgroundImage !== 'none' && actualTarget.tagName.toLowerCase() !== 'img';
+
+        if (isActuallyBg) {
+          const bgImg = getComputedStyle(actualTarget).backgroundImage;
           const urlMatch = bgImg.match(/url\(["']?(.*?)["']?\)/);
           currentSrc = urlMatch ? urlMatch[1] : "";
         } else {
-          currentSrc = targetEl.src;
+          currentSrc = actualTarget.src;
         }
 
-        // Crear un input de archivo oculto para permitir subir desde la PC
         const fileInput = document.createElement('input');
         fileInput.type = 'file';
         fileInput.accept = 'image/*';
@@ -557,68 +583,62 @@ const enableVisualEditing = () => {
           const file = ev.target.files[0];
           if (!file) return;
 
-          // Validar tamaño (localStorage tiene límite de ~5MB total)
           if (file.size > 1.5 * 1024 * 1024) {
-            alert("La imagen es muy pesada. Por favor elige una de menos de 1.5MB para que se pueda guardar correctamente.");
+            alert("La imagen es muy pesada. Elige una de menos de 1.5MB.");
             return;
           }
 
           const reader = new FileReader();
           reader.onload = event => {
             const newSrc = event.target.result;
-            if (isBg) {
-              // Mantener el gradiente si existe
-              const currentBg = getComputedStyle(targetEl).backgroundImage;
+            if (isActuallyBg) {
+              const currentBg = getComputedStyle(actualTarget).backgroundImage;
               if (currentBg.includes('gradient')) {
                 const gradientPart = currentBg.split('url(')[0];
-                targetEl.style.backgroundImage = `${gradientPart}url("${newSrc}")`;
+                actualTarget.style.backgroundImage = `${gradientPart}url("${newSrc}")`;
               } else {
-                targetEl.style.backgroundImage = `url("${newSrc}")`;
+                actualTarget.style.backgroundImage = `url("${newSrc}")`;
               }
-              targetEl.style.backgroundSize = 'cover';
-              targetEl.style.backgroundPosition = 'center';
+              actualTarget.style.backgroundSize = 'cover';
+              actualTarget.style.backgroundPosition = 'center';
             } else {
-              targetEl.src = newSrc;
+              actualTarget.src = newSrc;
             }
           };
           reader.readAsDataURL(file);
         };
         
-        const action = confirm("¿Quieres subir una imagen desde tu PC? (Aceptar) o ingresar una URL de internet? (Cancelar)");
+        const action = confirm("¿Subir desde PC? (Aceptar) o ¿Ingresar URL? (Cancelar)");
         if (action) {
           fileInput.click();
         } else {
-          const newUrl = prompt("Ingresa la URL de la nueva imagen:", currentSrc);
+          const newUrl = prompt("URL de la imagen:", currentSrc);
           if (newUrl) {
-            if (isBg) {
-              const currentBg = getComputedStyle(targetEl).backgroundImage;
+            if (isActuallyBg) {
+              const currentBg = getComputedStyle(actualTarget).backgroundImage;
               if (currentBg.includes('gradient')) {
                 const gradientPart = currentBg.split('url(')[0];
-                targetEl.style.backgroundImage = `${gradientPart}url("${newUrl}")`;
+                actualTarget.style.backgroundImage = `${gradientPart}url("${newUrl}")`;
               } else {
-                targetEl.style.backgroundImage = `url("${newUrl}")`;
+                actualTarget.style.backgroundImage = `url("${newUrl}")`;
               }
-              targetEl.style.backgroundSize = 'cover';
-              targetEl.style.backgroundPosition = 'center';
             } else {
-              targetEl.src = newUrl;
+              actualTarget.src = newUrl;
             }
           }
         }
-      });
+      };
     }
   });
 
   document.getElementById('adminSaveVisual').addEventListener('click', () => {
     saveAllChanges();
-    // Desactivar contenteditable de todos antes de recargar
     document.querySelectorAll('[contenteditable]').forEach(el => el.contentEditable = "false");
-    alert("¡Cambios guardados con éxito!");
+    alert("¡Cambios guardados localmente! Recuerda descargar el JSON para actualizar GitHub.");
     location.reload();
   });
 
   document.getElementById('adminCancelVisual').addEventListener('click', () => {
-    document.querySelectorAll('[contenteditable]').forEach(el => el.contentEditable = "false");
     location.reload();
   });
 };
@@ -647,43 +667,30 @@ const getElementPath = (el) => {
 
 const saveAllChanges = () => {
   const pageId = currentPage || 'global';
-  const changes = {
-    texts: {},
-    images: {}
-  };
+  const changes = { texts: {}, images: {} };
 
-  const tagsToEdit = 'p, h1, h2, h3, span, strong, small, .eyebrow, .button, .service-price, .testimonial strong';
+  const tagsToEdit = 'p, h1, h2, h3, span, strong, small, figcaption, .eyebrow, .button, .service-price, .testimonial strong';
   document.querySelectorAll(tagsToEdit).forEach((el) => {
     if (!el.closest('.admin-overlay') && !el.closest('.nav')) {
       const path = getElementPath(el);
-      // Limpiar rastro de edición
-      const cleanHTML = el.innerHTML
+      changes.texts[path] = el.innerHTML
         .replace(/contenteditable="[^"]*?"/g, '')
         .replace(/spellcheck="[^"]*?"/g, '')
-        .replace(/style="[^"]*?outline[^"]*?"/g, '')
-        .replace(/style="[^"]*?border[^"]*?"/g, '')
-        .replace(/class="[^"]*?editable-img[^"]*?"/g, '')
         .trim();
-      
-      changes.texts[path] = cleanHTML;
     }
   });
 
   document.querySelectorAll('.editable-img').forEach((el) => {
-    const path = getElementPath(el);
-    let targetEl = el;
-    let isBg = false;
-    
-    const internalImg = el.querySelector('img');
-    if (el.tagName.toLowerCase() === 'img') {
-      targetEl = el;
-    } else if (internalImg) {
-      targetEl = internalImg;
-    } else {
-      isBg = true;
-    }
+    const isHero = el.classList.contains('hero') || el.classList.contains('page-hero');
+    const backdrop = el.querySelector('.hero-backdrop');
+    let targetEl = (isHero && backdrop) ? backdrop : el;
+    const internalImg = targetEl.querySelector('img');
+    if (internalImg) targetEl = internalImg;
 
+    const isBg = getComputedStyle(targetEl).backgroundImage !== 'none' && targetEl.tagName.toLowerCase() !== 'img';
+    const path = getElementPath(targetEl);
     let src = "";
+
     if (isBg) {
       const bgImg = getComputedStyle(targetEl).backgroundImage;
       const urlMatch = bgImg.match(/url\(["']?(.*?)["']?\)/);
@@ -692,14 +699,13 @@ const saveAllChanges = () => {
       src = targetEl.src;
     }
     
-    changes.images[path] = { src, isBg };
+    if (src) changes.images[path] = { src, isBg };
   });
 
   try {
     localStorage.setItem(`miri_changes_${pageId}`, JSON.stringify(changes));
   } catch (e) {
-    console.error("Error al guardar en localStorage:", e);
-    alert("No se pudieron guardar todos los cambios porque las imágenes son demasiado pesadas. Por favor, intenta usar imágenes más pequeñas (menos de 1MB).");
+    alert("Error: Las imágenes son muy pesadas. Usa imágenes más pequeñas.");
   }
 };
 
@@ -728,10 +734,10 @@ const applySavedChanges = () => {
       try {
         const el = document.querySelector(path);
         const item = data.images[path];
-        if (el) {
+        if (el && item.src) {
           if (item.isBg) {
             const currentBg = getComputedStyle(el).backgroundImage;
-            if (currentBg.includes('gradient')) {
+            if (currentBg && currentBg.includes('gradient')) {
               const gradientPart = currentBg.split('url(')[0];
               el.style.backgroundImage = `${gradientPart}url("${item.src}")`;
             } else {
@@ -740,12 +746,8 @@ const applySavedChanges = () => {
             el.style.backgroundSize = 'cover';
             el.style.backgroundPosition = 'center';
           } else {
-            const internalImg = el.querySelector('img');
-            if (el.tagName.toLowerCase() === 'img') {
-              el.src = item.src;
-            } else if (internalImg) {
-              internalImg.src = item.src;
-            }
+            // Es un img directamente (o dentro de un contenedor)
+            el.src = item.src;
           }
         }
       } catch (e) { console.warn("No se pudo aplicar imagen en path:", path); }
@@ -753,14 +755,17 @@ const applySavedChanges = () => {
   }
 };
 
-// Aplicar cambios al cargar cualquier página
-document.addEventListener('DOMContentLoaded', () => {
-  // Primero intentar cargar desde archivo JSON externo (GitHub)
-  fetch('miri_data.json')
-    .then(response => response.json())
+const syncWithCloud = (force = false) => {
+  return fetch('miri_data.json')
+    .then(response => {
+      if (!response.ok) throw new Error("No data file");
+      return response.json();
+    })
     .then(data => {
       if (data) {
-        // Sincronizar localStorage con los datos del archivo si son más recientes o no existen
+        let updated = false;
+        
+        // Config y bookings
         if (data.config) {
           if (data.config.wa) localStorage.setItem("miri_wa_number", data.config.wa);
           if (data.config.mp) localStorage.setItem("miri_mp_link", data.config.mp);
@@ -768,19 +773,43 @@ document.addEventListener('DOMContentLoaded', () => {
         if (data.bookings) {
           localStorage.setItem("bookedSlots", JSON.stringify(data.bookings));
         }
+
+        // Sincronizar cambios de páginas
         if (data.changes) {
           Object.keys(data.changes).forEach(p => {
-            localStorage.setItem(`miri_changes_${p}`, JSON.stringify(data.changes[p]));
+            const local = localStorage.getItem(`miri_changes_${p}`);
+            const remoteStr = JSON.stringify(data.changes[p]);
+            
+            // Si forzamos, o si no hay local, cargamos el remoto
+            if (force || !local) {
+              localStorage.setItem(`miri_changes_${p}`, remoteStr);
+              updated = true;
+            }
           });
         }
-        // Aplicar los cambios después de sincronizar
-        applySavedChanges();
+        
+        if (updated) {
+          applySavedChanges();
+          if (force) {
+            alert("Sincronización completada.");
+            location.reload();
+          }
+        }
       }
     })
     .catch(err => {
-      console.log("No se encontró miri_data.json o error al cargar, usando datos locales.");
-      applySavedChanges();
+      console.log("Sin cambios remotos (o error al conectar).");
+      if (force) alert("No se pudo conectar con GitHub para cargar los datos.");
     });
+};
+
+// Aplicar cambios al cargar cualquier página
+document.addEventListener('DOMContentLoaded', () => {
+  // 1. Aplicar cambios locales inmediatamente (prioridad absoluta para el editor)
+  applySavedChanges();
+
+  // 2. Sincronizar suavemente: SOLO si no hay datos locales, cargamos los de la nube
+  syncWithCloud(false);
 });
 
 const renderAdminBookings = () => {

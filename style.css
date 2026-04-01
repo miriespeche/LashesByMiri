@@ -1174,6 +1174,41 @@ button {
 }
 
 /* Forzar que NO se vea nada si no hay .editing-mode */
+body.editing-mode .editable-img[data-edit-hint] {
+  position: relative;
+  cursor: pointer;
+}
+
+body.editing-mode .editable-img[data-edit-hint]::after {
+  content: attr(data-edit-hint);
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+  background: rgba(217, 138, 167, 0.9);
+  color: white;
+  padding: 0.6rem 1.2rem;
+  border-radius: 999px;
+  font-size: 0.9rem;
+  font-weight: 800;
+  z-index: 100;
+  pointer-events: none;
+  opacity: 0.5;
+  transition: opacity 0.3s ease;
+  white-space: nowrap;
+}
+
+body.editing-mode .editable-img[data-edit-hint]:hover::after {
+  opacity: 1;
+}
+
+body.editing-mode .hero.editable-img[data-edit-hint]::after,
+body.editing-mode .page-hero.editable-img[data-edit-hint]::after {
+  top: 80px;
+  left: 50%;
+  transform: translateX(-50%);
+}
+
 body:not(.editing-mode) [contenteditable="true"],
 body:not(.editing-mode) [contenteditable="false"],
 body:not(.editing-mode) [contenteditable],
