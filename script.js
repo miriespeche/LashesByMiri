@@ -534,15 +534,26 @@ const enableVisualEditing = () => {
   });
 
   // Manejar imágenes normales e imágenes de fondo
-  const elementsWithImages = document.querySelectorAll('img, .hero-backdrop, .gallery-item, .hero, .page-hero');
+  const elementsWithImages = document.querySelectorAll('img, .hero-backdrop, .collage-item, .gallery-item, .hero, .page-hero');
   
   elementsWithImages.forEach(el => {
     if (el.closest('.admin-overlay')) return;
 
     const isHero = el.classList.contains('hero') || el.classList.contains('page-hero');
     const backdrop = el.querySelector('.hero-backdrop');
-    const editTarget = (isHero && backdrop) ? backdrop : el;
+    const collageItems = el.querySelectorAll('.collage-item');
     
+    // Si es un hero con collage, el objetivo son los items
+    if (isHero && collageItems.length > 0) {
+      collageItems.forEach(item => {
+        item.classList.add('editable-img');
+        item.setAttribute('data-edit-hint', 'Cambiar foto collage');
+        setupImageClick(item, true);
+      });
+      return;
+    }
+
+    const editTarget = (isHero && backdrop) ? backdrop : el;
     const hasBg = getComputedStyle(editTarget).backgroundImage !== 'none';
     const isImg = editTarget.tagName.toLowerCase() === 'img';
     const internalImg = editTarget.querySelector('img');
@@ -552,84 +563,112 @@ const enableVisualEditing = () => {
       if (hasBg && !isImg && !internalImg) {
         el.setAttribute('data-edit-hint', 'Cambiar fondo');
       }
+      setupImageClick(el, hasBg && !isImg && !internalImg, editTarget, internalImg);
+    }
+  });
 
-      el.onclick = (e) => {
-        if (e.target !== el && (e.target.contentEditable === "true" || e.target.closest('.button'))) {
-          return;
-        }
+  function setupImageClick(clickEl, isActuallyBg, editTargetArg, internalImgArg) {
+    clickEl.onclick = (e) => {
+      if (e.target !== clickEl && (e.target.contentEditable === "true" || e.target.closest('.button'))) {
+        return;
+      }
 
-        e.preventDefault();
-        e.stopPropagation();
-        
-        let actualTarget = editTarget;
-        if (internalImg) actualTarget = internalImg;
+      e.preventDefault();
+      e.stopPropagation();
+      
+      let actualTarget = editTargetArg || clickEl;
+      if (internalImgArg) actualTarget = internalImgArg;
 
-        let currentSrc = "";
-        const isActuallyBg = getComputedStyle(actualTarget).backgroundImage !== 'none' && actualTarget.tagName.toLowerCase() !== 'img';
+      let currentSrc = "";
+      const isBg = isActuallyBg || (getComputedStyle(actualTarget).backgroundImage !== 'none' && actualTarget.tagName.toLowerCase() !== 'img');
 
-        if (isActuallyBg) {
-          const bgImg = getComputedStyle(actualTarget).backgroundImage;
-          const urlMatch = bgImg.match(/url\(["']?(.*?)["']?\)/);
-          currentSrc = urlMatch ? urlMatch[1] : "";
-        } else {
-          currentSrc = actualTarget.src;
-        }
+      if (isBg) {
+        const bgImg = getComputedStyle(actualTarget).backgroundImage;
+        const urlMatch = bgImg.match(/url\(["']?(.*?)["']?\)/);
+        currentSrc = urlMatch ? urlMatch[1] : "";
+      } else {
+        currentSrc = actualTarget.src;
+      }
 
-        const fileInput = document.createElement('input');
-        fileInput.type = 'file';
-        fileInput.accept = 'image/*';
-        
-        fileInput.onchange = ev => {
+      const fileInput = document.createElement('input');
+      fileInput.type = 'file';
+      fileInput.accept = 'image/*';
+      
+      fileInput.onchange = ev => {
           const file = ev.target.files[0];
           if (!file) return;
 
-          if (file.size > 1.5 * 1024 * 1024) {
-            alert("La imagen es muy pesada. Elige una de menos de 1.5MB.");
+          // Aumentamos el límite a 4MB para fotos de alta calidad, pero comprimiremos si es necesario
+          if (file.size > 4 * 1024 * 1024) {
+            alert("La imagen es demasiado pesada (más de 4MB). Por favor, usa una imagen más liviana.");
             return;
           }
 
           const reader = new FileReader();
           reader.onload = event => {
-            const newSrc = event.target.result;
-            if (isActuallyBg) {
-              const currentBg = getComputedStyle(actualTarget).backgroundImage;
-              if (currentBg.includes('gradient')) {
-                const gradientPart = currentBg.split('url(')[0];
-                actualTarget.style.backgroundImage = `${gradientPart}url("${newSrc}")`;
-              } else {
-                actualTarget.style.backgroundImage = `url("${newSrc}")`;
+            const img = new Image();
+            img.onload = () => {
+              // Crear un canvas para redimensionar la imagen si es muy grande
+              // Esto asegura que el JSON no explote por el tamaño
+              const canvas = document.createElement('canvas');
+              let width = img.width;
+              let height = img.height;
+              
+              // Si la imagen es más grande que 1200px, la achicamos manteniendo proporción
+              const MAX_WIDTH = 1200;
+              if (width > MAX_WIDTH) {
+                height *= MAX_WIDTH / width;
+                width = MAX_WIDTH;
               }
-              actualTarget.style.backgroundSize = 'cover';
-              actualTarget.style.backgroundPosition = 'center';
-            } else {
-              actualTarget.src = newSrc;
-            }
+
+              canvas.width = width;
+              canvas.height = height;
+              const ctx = canvas.getContext('2d');
+              ctx.drawImage(img, 0, 0, width, height);
+              
+              // Convertir a JPEG con calidad 0.7 para ahorrar MUCHO espacio
+              const newSrc = canvas.toDataURL('image/jpeg', 0.7);
+              
+              if (isBg) {
+                const currentBg = getComputedStyle(actualTarget).backgroundImage;
+                if (currentBg.includes('gradient')) {
+                  const gradientPart = currentBg.split('url(')[0];
+                  actualTarget.style.backgroundImage = `${gradientPart}url("${newSrc}")`;
+                } else {
+                  actualTarget.style.backgroundImage = `url("${newSrc}")`;
+                }
+                actualTarget.style.backgroundSize = 'cover';
+                actualTarget.style.backgroundPosition = 'center';
+              } else {
+                actualTarget.src = newSrc;
+              }
+            };
+            img.src = event.target.result;
           };
           reader.readAsDataURL(file);
         };
-        
-        const action = confirm("¿Subir desde PC? (Aceptar) o ¿Ingresar URL? (Cancelar)");
-        if (action) {
-          fileInput.click();
-        } else {
-          const newUrl = prompt("URL de la imagen:", currentSrc);
-          if (newUrl) {
-            if (isActuallyBg) {
-              const currentBg = getComputedStyle(actualTarget).backgroundImage;
-              if (currentBg.includes('gradient')) {
-                const gradientPart = currentBg.split('url(')[0];
-                actualTarget.style.backgroundImage = `${gradientPart}url("${newUrl}")`;
-              } else {
-                actualTarget.style.backgroundImage = `url("${newUrl}")`;
-              }
+      
+      const action = confirm("¿Subir desde PC? (Aceptar) o ¿Ingresar URL? (Cancelar)");
+      if (action) {
+        fileInput.click();
+      } else {
+        const newUrl = prompt("URL de la imagen:", currentSrc);
+        if (newUrl) {
+          if (isBg) {
+            const currentBg = getComputedStyle(actualTarget).backgroundImage;
+            if (currentBg.includes('gradient')) {
+              const gradientPart = currentBg.split('url(')[0];
+              actualTarget.style.backgroundImage = `${gradientPart}url("${newUrl}")`;
             } else {
-              actualTarget.src = newUrl;
+              actualTarget.style.backgroundImage = `url("${newUrl}")`;
             }
+          } else {
+            actualTarget.src = newUrl;
           }
         }
-      };
-    }
-  });
+      }
+    };
+  }
 
   document.getElementById('adminSaveVisual').addEventListener('click', () => {
     saveAllChanges();
@@ -681,7 +720,12 @@ const saveAllChanges = () => {
   });
 
   document.querySelectorAll('.editable-img').forEach((el) => {
+    // Si el elemento es un hero o page-hero, el ahorro de datos real está en sus hijos (backdrop o collage)
+    // No guardamos el contenedor padre si tiene hijos editables
     const isHero = el.classList.contains('hero') || el.classList.contains('page-hero');
+    const hasEditableChildren = el.querySelectorAll('.editable-img').length > 0;
+    if (isHero && hasEditableChildren) return;
+
     const backdrop = el.querySelector('.hero-backdrop');
     let targetEl = (isHero && backdrop) ? backdrop : el;
     const internalImg = targetEl.querySelector('img');

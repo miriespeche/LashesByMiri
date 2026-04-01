@@ -314,19 +314,55 @@ button {
   align-items: center;
   padding: 8rem 0 5rem;
   position: relative;
+  overflow: hidden;
 }
 
-.hero-backdrop {
+.hero-collage {
   position: absolute;
   inset: 0;
-  background-color: #27171f; /* Color de respaldo */
-  background-image: 
-    linear-gradient(90deg, rgba(39, 23, 31, 0.68) 0%, rgba(39, 23, 31, 0.42) 42%, rgba(39, 23, 31, 0.2) 100%),
-    url("https://images.unsplash.com/photo-1519415943484-9fa1873496d4?auto=format&fit=crop&w=1600&q=80");
-  background-position: center;
+  display: grid;
+  grid-template-columns: repeat(3, 1fr);
+  grid-template-rows: repeat(2, 1fr);
+  gap: 2px;
+  background-color: #27171f;
+}
+
+.collage-item {
   background-size: cover;
+  background-position: center;
   background-repeat: no-repeat;
-  transform: scale(1.02);
+  transition: transform 0.3s ease;
+  position: relative;
+  filter: sepia(0.2) saturate(1.1) brightness(0.9);
+}
+
+.collage-item-1 { grid-column: span 1; grid-row: span 1; background-image: url("https://images.unsplash.com/photo-1519415943484-9fa1873496d4?auto=format&fit=crop&w=800&q=80"); }
+.collage-item-2 { grid-column: span 1; grid-row: span 1; background-image: url("https://images.unsplash.com/photo-1517841905240-472988babdf9?auto=format&fit=crop&w=800&q=80"); }
+.collage-item-3 { grid-column: span 1; grid-row: span 2; background-image: url("https://images.unsplash.com/photo-1515377905703-c4788e51af15?auto=format&fit=crop&w=800&q=80"); }
+.collage-item-4 { grid-column: span 1; grid-row: span 1; background-image: url("https://images.unsplash.com/photo-1515886657613-9f3515b0c78f?auto=format&fit=crop&w=800&q=80"); }
+.collage-item-5 { grid-column: span 1; grid-row: span 1; background-image: url("https://images.unsplash.com/photo-1487412912498-0447578fcca8?auto=format&fit=crop&w=800&q=80"); }
+.collage-item-6 { grid-column: span 1; grid-row: span 1; background-image: url("https://images.unsplash.com/photo-1526047932273-341f2a7631f9?auto=format&fit=crop&w=800&q=80"); }
+
+/* Diseño móvil del collage */
+@media (max-width: 860px) {
+  .hero-collage {
+    grid-template-columns: 1fr 1fr;
+    grid-template-rows: repeat(3, 1fr);
+  }
+  .collage-item-3 { grid-column: span 1; grid-row: span 1; }
+  .collage-item-6 { display: none; }
+}
+
+.hero-overlay {
+  position: absolute;
+  inset: 0;
+  background: linear-gradient(90deg, rgba(39, 23, 31, 0.75) 0%, rgba(39, 23, 31, 0.5) 45%, rgba(39, 23, 31, 0.3) 100%);
+  z-index: 1;
+}
+
+.editing-mode .hero-overlay,
+.editing-mode .hero::after {
+  pointer-events: none;
 }
 
 .hero::after {
@@ -335,12 +371,13 @@ button {
   inset: auto 0 0;
   height: 180px;
   background: linear-gradient(180deg, rgba(255, 250, 247, 0) 0%, var(--background) 100%);
+  z-index: 2;
 }
 
 .hero-layout {
   width: min(calc(100% - 2rem), var(--container));
   position: relative;
-  z-index: 1;
+  z-index: 3;
   display: grid;
   grid-template-columns: minmax(0, 1.05fr) minmax(360px, 0.95fr);
   gap: 2rem;
@@ -1196,6 +1233,12 @@ body.editing-mode .editable-img[data-edit-hint]::after {
   opacity: 0.5;
   transition: opacity 0.3s ease;
   white-space: nowrap;
+}
+
+.editing-mode .collage-item:hover {
+  transform: scale(0.98);
+  outline: 2px solid var(--primary);
+  z-index: 10;
 }
 
 body.editing-mode .editable-img[data-edit-hint]:hover::after {
