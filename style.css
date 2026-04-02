@@ -270,31 +270,32 @@ button {
 
 .menu-toggle {
   display: none;
-  width: 44px;
-  height: 44px;
-  border-radius: 12px;
-  align-items: center;
-  justify-content: center;
-  flex-direction: column;
-  gap: 4.5px;
+  width: 44px !important;
+  height: 44px !important;
+  border-radius: 12px !important;
+  align-items: center !important;
+  justify-content: center !important;
+  flex-direction: column !important;
+  gap: 4.5px !important;
   background: #ffffff !important;
-  border: 1px solid rgba(188, 103, 136, 0.2);
-  box-shadow: 0 4px 15px rgba(0,0,0,0.1);
-  cursor: pointer;
-  z-index: 1001;
-  position: relative;
-  padding: 0;
+  border: 1px solid rgba(188, 103, 136, 0.3) !important;
+  box-shadow: 0 4px 15px rgba(0,0,0,0.1) !important;
+  cursor: pointer !important;
+  z-index: 9999 !important;
+  position: relative !important;
+  padding: 0 !important;
 }
 
 .menu-toggle span {
-  display: block;
-  width: 22px;
-  height: 2px;
+  display: block !important;
+  width: 22px !important;
+  height: 2px !important;
   background-color: #49343f !important;
-  border-radius: 2px;
-  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-  pointer-events: none;
+  border-radius: 2px !important;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1) !important;
+  pointer-events: none !important;
   opacity: 1 !important;
+  visibility: visible !important;
 }
 
 /* Efecto cuando está abierto */
@@ -1589,7 +1590,7 @@ body:not(.editing-mode) h3 {
     font-size: 1.75rem;
   }
   .menu-toggle {
-    display: inline-flex;
+    display: flex !important;
   }
 
   .nav {
@@ -1677,7 +1678,7 @@ body:not(.editing-mode) h3 {
   }
 
   .menu-toggle {
-    display: flex;
+    display: flex !important;
   }
 
   .hero-copy h1 {
