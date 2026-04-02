@@ -77,6 +77,11 @@ const injectAdminUI = () => {
       <div class="admin-modal">
         <span class="admin-close" id="adminClose">&times;</span>
         <h2>MiriAdmin Panel</h2>
+        <div style="display:flex; gap:10px; flex-wrap:wrap; margin-bottom: 2rem;">
+          <button class="button button-secondary" id="adminJumpGeneral" style="min-height:44px; padding:0.6rem 1rem;">General</button>
+          <button class="button button-secondary" id="adminJumpSchedule" style="min-height:44px; padding:0.6rem 1rem;">Horarios</button>
+          <button class="button button-secondary" id="adminJumpBookings" style="min-height:44px; padding:0.6rem 1rem;">Turnos</button>
+        </div>
         <div class="admin-section">
           <h3>Nube Automática (Supabase)</h3>
           <p style="font-size:0.85rem; color:#666; margin-bottom:10px;">Pega tu "Anon Public Key" (la que empieza con <b>eyJ</b>) para que todo se guarde solo.</p>
@@ -98,7 +103,7 @@ const injectAdminUI = () => {
           <h3>Edición Visual</h3>
           <button class="button button-primary btn-save-all" id="adminEnableEdit">Activar Modo Edición</button>
         </div>
-        <div class="admin-section">
+        <div class="admin-section" id="adminSectionGeneral">
           <h3>General</h3>
           <div class="admin-grid">
             <div class="admin-field"><label>WhatsApp</label><input type="text" id="adminWaNumber"></div>
@@ -117,15 +122,23 @@ const injectAdminUI = () => {
           <button class="button button-primary" id="adminSaveSlots" style="margin-top:10px; background:#d98aa7;">Actualizar Horarios Generales</button>
         </div>
         <div class="admin-section">
-          <h3>Horarios por Fecha Específica</h3>
-          <p style="font-size:0.85rem; color:#666; margin-bottom:10px;">Define horarios únicos para un día puntual.</p>
-          <div class="admin-grid">
-            <div class="admin-field"><label>Fecha</label><input type="date" id="adminCustomDate"></div>
-            <div class="admin-field"><label>Horas (ej: 10:00, 11:00)</label><input type="text" id="adminCustomSlots" placeholder="Si dejas vacío, borra el día"></div>
+          <h3>Horarios por Día (Calendario)</h3>
+          <p style="font-size:0.85rem; color:#666; margin-bottom:10px;">Elegí un día en el calendario y definí sus horarios. Si dejás vacío, ese día usa los horarios generales.</p>
+          <div class="calendar-wrapper" style="padding: 1.5rem; margin-bottom: 1.5rem;">
+            <div class="calendar-header">
+              <button id="adminSchedulePrev">&lt;</button>
+              <h2 id="adminScheduleMonth">Mes Año</h2>
+              <button id="adminScheduleNext">&gt;</button>
+            </div>
+            <div class="calendar-grid" id="adminScheduleGrid"></div>
           </div>
-          <button class="button button-primary" id="adminSaveCustomDay" style="margin-top:10px; background:#4a5568;">Guardar Día Específico</button>
+          <div class="admin-grid">
+            <div class="admin-field"><label>Fecha seleccionada</label><input type="date" id="adminCustomDate"></div>
+            <div class="admin-field"><label>Horarios (coma)</label><input type="text" id="adminCustomSlots" placeholder="Ej: 10:00, 11:00, 12:30"></div>
+          </div>
+          <button class="button button-primary" id="adminSaveCustomDay" style="margin-top:10px; background:#4a5568;">Guardar Horarios del Día</button>
         </div>
-        <div class="admin-section">
+        <div class="admin-section" id="adminSectionBookings">
           <h3>Turnos</h3>
           <div class="admin-table-wrapper"><table class="admin-table"><thead><tr><th>Fecha</th><th>Hora</th><th>Estudio</th><th>Cliente</th><th>Acción</th></tr></thead><tbody id="adminBookingsTable"></tbody></table></div>
         </div>
@@ -135,6 +148,9 @@ const injectAdminUI = () => {
   document.body.insertAdjacentHTML('beforeend', html);
   adminOverlay = document.getElementById("adminOverlay");
   document.getElementById("adminClose").onclick = () => adminOverlay.style.display = "none";
+  document.getElementById("adminJumpGeneral").onclick = () => document.getElementById("adminSectionGeneral")?.scrollIntoView({behavior: "smooth", block: "start"});
+  document.getElementById("adminJumpSchedule").onclick = () => document.getElementById("adminSectionSlots")?.scrollIntoView({behavior: "smooth", block: "start"});
+  document.getElementById("adminJumpBookings").onclick = () => document.getElementById("adminSectionBookings")?.scrollIntoView({behavior: "smooth", block: "start"});
   document.getElementById("adminEnableEdit").onclick = () => { adminOverlay.style.display = "none"; enableVisualEditing(); };
   document.getElementById("adminSaveCloudConfig").onclick = () => {
     localStorage.setItem("miri_supabase_url", document.getElementById("adminSupabaseUrl").value.trim());
@@ -148,7 +164,7 @@ const injectAdminUI = () => {
     const mp = document.getElementById("adminMpLink").value.trim();
     if(wa) localStorage.setItem("miri_wa_number", wa);
     if(mp) localStorage.setItem("miri_mp_link", mp);
-    if(isCloudEnabled()) cloudUpsert("config", {id:1, wa:wa||WHATSAPP_NUMBER, mp:mp||MERCADO_PAGO_LINK, slots: WORK_SLOTS, custom_days: CUSTOM_WORK_DAYS}).then(() => location.reload());
+    if(isCloudEnabled()) cloudUpsert("config", {id:1, wa:wa||WHATSAPP_NUMBER, mp:mp||MERCADO_PAGO_LINK}).then(() => location.reload());
     else location.reload();
   };
   document.getElementById("adminSaveSlots").onclick = () => {
@@ -158,7 +174,11 @@ const injectAdminUI = () => {
       if(slotsArr.length > 0) {
         localStorage.setItem("miri_work_slots", JSON.stringify(slotsArr));
         WORK_SLOTS = slotsArr;
-        if(isCloudEnabled()) cloudUpsert("config", {id:1, wa:WHATSAPP_NUMBER, mp:MERCADO_PAGO_LINK, slots: WORK_SLOTS, custom_days: CUSTOM_WORK_DAYS}).then(() => location.reload());
+        localStorage.setItem("miri_custom_days", JSON.stringify(CUSTOM_WORK_DAYS));
+        if(isCloudEnabled()) cloudUpsert("page_changes", {id:"schedule", data:{slots: WORK_SLOTS, custom_days: CUSTOM_WORK_DAYS}}).then(ok => {
+          if(!ok) alert("No se pudo guardar en la nube. Quedó guardado localmente.");
+          location.reload();
+        });
         else location.reload();
       }
     }
@@ -166,7 +186,6 @@ const injectAdminUI = () => {
   document.getElementById("adminSaveCustomDay").onclick = () => {
     const rawDate = document.getElementById("adminCustomDate").value;
     if(!rawDate) return alert("Selecciona una fecha");
-    // Formatear a dd/mm/aaaa como se usa en bookedSlots
     const [y, m, d] = rawDate.split("-");
     const dStr = `${parseInt(d)}/${parseInt(m)}/${y}`;
     const rawSlots = document.getElementById("adminCustomSlots").value.trim();
@@ -180,7 +199,11 @@ const injectAdminUI = () => {
     
     localStorage.setItem("miri_custom_days", JSON.stringify(newCustomDays));
     CUSTOM_WORK_DAYS = newCustomDays;
-    if(isCloudEnabled()) cloudUpsert("config", {id:1, wa:WHATSAPP_NUMBER, mp:MERCADO_PAGO_LINK, slots: WORK_SLOTS, custom_days: CUSTOM_WORK_DAYS}).then(() => location.reload());
+    localStorage.setItem("miri_work_slots", JSON.stringify(WORK_SLOTS));
+    if(isCloudEnabled()) cloudUpsert("page_changes", {id:"schedule", data:{slots: WORK_SLOTS, custom_days: CUSTOM_WORK_DAYS}}).then(ok => {
+      if(!ok) alert("No se pudo guardar en la nube. Quedó guardado localmente.");
+      location.reload();
+    });
     else location.reload();
   };
   document.getElementById("adminDownloadChanges").onclick = () => {
@@ -188,6 +211,61 @@ const injectAdminUI = () => {
     ['inicio', 'servicios', 'galeria', 'opiniones', 'contacto', 'reservar', 'global'].forEach(p => { const s = localStorage.getItem(`miri_changes_${p}`); if(s) data.changes[p] = JSON.parse(s); });
     const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob([JSON.stringify(data, null, 2)], {type:"application/json"})); a.download = "miri_data.json"; a.click();
   };
+
+  const monthEl = document.getElementById("adminScheduleMonth");
+  const grid = document.getElementById("adminScheduleGrid");
+  const dateInput = document.getElementById("adminCustomDate");
+  const slotsInput = document.getElementById("adminCustomSlots");
+  let curr = new Date();
+  let selected = null;
+
+  const toKey = (date) => `${date.getDate()}/${date.getMonth() + 1}/${date.getFullYear()}`;
+  const toDateInput = (date) => {
+    const y = `${date.getFullYear()}`;
+    const m = `${date.getMonth() + 1}`.padStart(2, "0");
+    const d = `${date.getDate()}`.padStart(2, "0");
+    return `${y}-${m}-${d}`;
+  };
+
+  const selectDay = (date) => {
+    selected = date;
+    const key = toKey(date);
+    dateInput.value = toDateInput(date);
+    const custom = CUSTOM_WORK_DAYS[key];
+    slotsInput.value = Array.isArray(custom) ? custom.join(", ") : "";
+    renderScheduleCal();
+  };
+
+  const renderScheduleCal = () => {
+    if(!grid || !monthEl) return;
+    grid.innerHTML = "";
+    monthEl.textContent = new Intl.DateTimeFormat("es-ES", {month:"long", year:"numeric"}).format(curr);
+    ["Dom", "Lun", "Mar", "Mié", "Jue", "Vie", "Sáb"].forEach(d => { const h = document.createElement("div"); h.className="calendar-day-head"; h.textContent=d; grid.appendChild(h); });
+    const first = new Date(curr.getFullYear(), curr.getMonth(), 1).getDay();
+    const last = new Date(curr.getFullYear(), curr.getMonth() + 1, 0).getDate();
+    for(let i=0; i<first; i++) grid.appendChild(document.createElement("div")).className="calendar-day empty";
+    for(let i=1; i<=last; i++) {
+      const cell = document.createElement("div");
+      cell.className = "calendar-day";
+      cell.textContent = i;
+      const date = new Date(curr.getFullYear(), curr.getMonth(), i);
+      if(selected && date.toDateString() === selected.toDateString()) cell.classList.add("selected");
+      const key = toKey(date);
+      if(CUSTOM_WORK_DAYS[key]) {
+        const indicator = document.createElement("div");
+        indicator.className = "day-indicator";
+        indicator.innerHTML = '<span class="dot-indicator" style="background: var(--gold);"></span>';
+        cell.appendChild(indicator);
+      }
+      cell.onclick = () => selectDay(date);
+      grid.appendChild(cell);
+    }
+  };
+
+  document.getElementById("adminSchedulePrev").onclick = () => { curr.setMonth(curr.getMonth()-1); renderScheduleCal(); };
+  document.getElementById("adminScheduleNext").onclick = () => { curr.setMonth(curr.getMonth()+1); renderScheduleCal(); };
+  renderScheduleCal();
+  selectDay(new Date());
 };
 
 const openAdminPanel = () => {
@@ -357,6 +435,8 @@ if(currentPage === "reservar") {
     });
   };
 
+  window.__miriRenderCal = renderCal;
+
   document.getElementById("prevMonth").onclick = () => { curr.setMonth(curr.getMonth()-1); renderCal(); };
   document.getElementById("nextMonth").onclick = () => { curr.setMonth(curr.getMonth()+1); renderCal(); };
   document.getElementById("confirmBooking").onclick = () => {
@@ -514,22 +594,33 @@ const applySavedChanges = () => {
 
 const syncWithCloud = (manual = false) => {
   if(isCloudEnabled()) {
-    cloudFetch("bookings").then(d => { if(d) { const c = {}; d.forEach(b => { if(!c[b.date]) c[b.date]=[]; c[b.date].push({time: b.time, studio: b.studio || "Monserrat", name: b.name || "-"}); }); localStorage.setItem("bookedSlots", JSON.stringify(c)); if(currentPage==="reservar") renderCal(); } });
+    cloudFetch("bookings").then(d => { if(d) { const c = {}; d.forEach(b => { if(!c[b.date]) c[b.date]=[]; c[b.date].push({time: b.time, studio: b.studio || "Monserrat", name: b.name || "-"}); }); localStorage.setItem("bookedSlots", JSON.stringify(c)); if(currentPage==="reservar" && window.__miriRenderCal) window.__miriRenderCal(); } });
     cloudFetch("config").then(d => { 
       if(d && d[0]) { 
         localStorage.setItem("miri_wa_number", d[0].wa); 
         localStorage.setItem("miri_mp_link", d[0].mp); 
-        if(d[0].slots) {
-          localStorage.setItem("miri_work_slots", JSON.stringify(d[0].slots));
-          WORK_SLOTS = d[0].slots;
-        }
-        if(d[0].custom_days) {
-          localStorage.setItem("miri_custom_days", JSON.stringify(d[0].custom_days));
-          CUSTOM_WORK_DAYS = d[0].custom_days;
-        }
       } 
     });
-    cloudFetch("page_changes").then(d => { if(d) d.forEach(i => localStorage.setItem(`miri_changes_${i.id}`, JSON.stringify(i.data))); applySavedChanges(); });
+    cloudFetch("page_changes").then(d => { 
+      if(d) {
+        d.forEach(i => {
+          if(i.id === "schedule") {
+            if(i.data && i.data.slots) {
+              localStorage.setItem("miri_work_slots", JSON.stringify(i.data.slots));
+              WORK_SLOTS = i.data.slots;
+            }
+            if(i.data && i.data.custom_days) {
+              localStorage.setItem("miri_custom_days", JSON.stringify(i.data.custom_days));
+              CUSTOM_WORK_DAYS = i.data.custom_days;
+            }
+            return;
+          }
+          localStorage.setItem(`miri_changes_${i.id}`, JSON.stringify(i.data));
+        });
+      }
+      applySavedChanges();
+      if(currentPage==="reservar" && window.__miriRenderCal) window.__miriRenderCal();
+    });
     if(manual) alert("Sincronización completada");
   } else if(manual) {
     alert("La nube no está configurada.");
@@ -557,4 +648,10 @@ window.releaseSlot = (d, t, s) => {
   }
 };
 
-document.addEventListener('DOMContentLoaded', () => { applySavedChanges(); syncWithCloud(); });
+document.addEventListener('DOMContentLoaded', () => { 
+  applySavedChanges(); 
+  syncWithCloud(); 
+  if(currentPage === "reservar" && isCloudEnabled()) {
+    setInterval(() => syncWithCloud(false), 20000);
+  }
+});
