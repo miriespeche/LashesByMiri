@@ -1,7 +1,24 @@
 let WHATSAPP_NUMBER = localStorage.getItem("miri_wa_number") || "5491144123280";
 const DEFAULT_MESSAGE = "Hola, quiero reservar un turno para extensiones de pestañas";
 let MERCADO_PAGO_LINK = localStorage.getItem("miri_mp_link") || "https://mpago.la/1iJbsQy";
-let WORK_SLOTS = JSON.parse(localStorage.getItem("miri_work_slots") || '["09:00", "10:00", "11:00", "12:00", "14:00", "15:00", "16:00", "17:00", "18:00"]');
+
+// --- Estructura de Horarios (Soporte Multi-estudio) ---
+const DEFAULT_SLOTS = ["09:00", "10:00", "11:00", "12:00", "14:00", "15:00", "16:00", "17:00", "18:00"];
+
+const loadWorkSlots = () => {
+  const saved = localStorage.getItem("miri_work_slots");
+  if (!saved) return { "Monserrat": [...DEFAULT_SLOTS], "José Marmol": [...DEFAULT_SLOTS] };
+  try {
+    const parsed = JSON.parse(saved);
+    // Compatibilidad con formato antiguo (array simple)
+    if (Array.isArray(parsed)) return { "Monserrat": parsed, "José Marmol": [...DEFAULT_SLOTS] };
+    return parsed;
+  } catch (e) {
+    return { "Monserrat": [...DEFAULT_SLOTS], "José Marmol": [...DEFAULT_SLOTS] };
+  }
+};
+
+let WORK_SLOTS = loadWorkSlots();
 let CUSTOM_WORK_DAYS = JSON.parse(localStorage.getItem("miri_custom_days") || "{}");
 
 // --- Configuración de Base de Datos (Supabase) ---
@@ -115,7 +132,15 @@ const injectAdminUI = () => {
           <h3>Horarios de Trabajo (Generales)</h3>
           <p style="font-size:0.85rem; color:#666; margin-bottom:10px;">Escribe los horarios separados por coma (ej: 09:00, 10:30, 14:00).</p>
           <div class="admin-grid">
-            <div class="admin-field" style="grid-column: span 2;">
+            <div class="admin-field">
+              <label>Estudio</label>
+              <select id="adminWorkSlotStudio">
+                <option value="Monserrat">Monserrat</option>
+                <option value="José Marmol">José Marmol</option>
+              </select>
+            </div>
+            <div class="admin-field">
+              <label>Horarios (coma)</label>
               <input type="text" id="adminWorkSlots" placeholder="09:00, 10:00, 11:00...">
             </div>
           </div>
@@ -133,8 +158,15 @@ const injectAdminUI = () => {
             <div class="calendar-grid" id="adminScheduleGrid"></div>
           </div>
           <div class="admin-grid">
+            <div class="admin-field">
+              <label>Estudio</label>
+              <select id="adminCustomSlotStudio">
+                <option value="Monserrat">Monserrat</option>
+                <option value="José Marmol">José Marmol</option>
+              </select>
+            </div>
             <div class="admin-field"><label>Fecha seleccionada</label><input type="date" id="adminCustomDate"></div>
-            <div class="admin-field"><label>Horarios (coma)</label><input type="text" id="adminCustomSlots" placeholder="Ej: 10:00, 11:00, 12:30"></div>
+            <div class="admin-field" style="grid-column: span 2;"><label>Horarios (coma)</label><input type="text" id="adminCustomSlots" placeholder="Ej: 10:00, 11:00, 12:30"></div>
           </div>
           <button class="button button-primary" id="adminSaveCustomDay" style="margin-top:10px; background:#4a5568;">Guardar Horarios del Día</button>
         </div>
@@ -168,13 +200,13 @@ const injectAdminUI = () => {
     else location.reload();
   };
   document.getElementById("adminSaveSlots").onclick = () => {
+    const studio = document.getElementById("adminWorkSlotStudio").value;
     const slotsRaw = document.getElementById("adminWorkSlots").value.trim();
     if(slotsRaw) {
       const slotsArr = slotsRaw.split(",").map(s => s.trim()).filter(s => s !== "");
       if(slotsArr.length > 0) {
-        localStorage.setItem("miri_work_slots", JSON.stringify(slotsArr));
-        WORK_SLOTS = slotsArr;
-        localStorage.setItem("miri_custom_days", JSON.stringify(CUSTOM_WORK_DAYS));
+        WORK_SLOTS[studio] = slotsArr;
+        localStorage.setItem("miri_work_slots", JSON.stringify(WORK_SLOTS));
         if(isCloudEnabled()) cloudUpsert("page_changes", {id:"schedule", data:{slots: WORK_SLOTS, custom_days: CUSTOM_WORK_DAYS}}).then(ok => {
           if(!ok) alert("No se pudo guardar en la nube. Quedó guardado localmente.");
           location.reload();
@@ -184,6 +216,7 @@ const injectAdminUI = () => {
     }
   };
   document.getElementById("adminSaveCustomDay").onclick = () => {
+    const studio = document.getElementById("adminCustomSlotStudio").value;
     const rawDate = document.getElementById("adminCustomDate").value;
     if(!rawDate) return alert("Selecciona una fecha");
     const [y, m, d] = rawDate.split("-");
@@ -191,15 +224,24 @@ const injectAdminUI = () => {
     const rawSlots = document.getElementById("adminCustomSlots").value.trim();
     
     const newCustomDays = {...CUSTOM_WORK_DAYS};
+    if(!newCustomDays[dStr]) newCustomDays[dStr] = {};
+    
+    // Si CUSTOM_WORK_DAYS[dStr] es un array (formato antiguo), lo convertimos
+    if(Array.isArray(newCustomDays[dStr])) {
+      const oldSlots = newCustomDays[dStr];
+      newCustomDays[dStr] = { "Monserrat": oldSlots, "José Marmol": [...DEFAULT_SLOTS] };
+    }
+
     if(!rawSlots) {
-      delete newCustomDays[dStr];
+      delete newCustomDays[dStr][studio];
+      // Si no quedan estudios con horarios personalizados ese día, borramos el día
+      if(Object.keys(newCustomDays[dStr]).length === 0) delete newCustomDays[dStr];
     } else {
-      newCustomDays[dStr] = rawSlots.split(",").map(s => s.trim()).filter(s => s !== "");
+      newCustomDays[dStr][studio] = rawSlots.split(",").map(s => s.trim()).filter(s => s !== "");
     }
     
     localStorage.setItem("miri_custom_days", JSON.stringify(newCustomDays));
     CUSTOM_WORK_DAYS = newCustomDays;
-    localStorage.setItem("miri_work_slots", JSON.stringify(WORK_SLOTS));
     if(isCloudEnabled()) cloudUpsert("page_changes", {id:"schedule", data:{slots: WORK_SLOTS, custom_days: CUSTOM_WORK_DAYS}}).then(ok => {
       if(!ok) alert("No se pudo guardar en la nube. Quedó guardado localmente.");
       location.reload();
@@ -231,9 +273,26 @@ const injectAdminUI = () => {
     selected = date;
     const key = toKey(date);
     dateInput.value = toDateInput(date);
-    const custom = CUSTOM_WORK_DAYS[key];
-    slotsInput.value = Array.isArray(custom) ? custom.join(", ") : "";
+    const studio = document.getElementById("adminCustomSlotStudio").value;
+    let custom = CUSTOM_WORK_DAYS[key];
+    
+    // Compatibilidad
+    if (Array.isArray(custom)) {
+      custom = { "Monserrat": custom, "José Marmol": [...DEFAULT_SLOTS] };
+    }
+    
+    const studioSlots = custom ? custom[studio] : null;
+    slotsInput.value = Array.isArray(studioSlots) ? studioSlots.join(", ") : "";
     renderScheduleCal();
+  };
+
+  document.getElementById("adminWorkSlotStudio").onchange = () => {
+    const studio = document.getElementById("adminWorkSlotStudio").value;
+    document.getElementById("adminWorkSlots").value = WORK_SLOTS[studio].join(", ");
+  };
+
+  document.getElementById("adminCustomSlotStudio").onchange = () => {
+    if (selected) selectDay(selected);
   };
 
   const renderScheduleCal = () => {
@@ -278,7 +337,9 @@ const openAdminPanel = () => {
   adminOverlay.style.display = "flex";
   document.getElementById("adminWaNumber").value = WHATSAPP_NUMBER;
   document.getElementById("adminMpLink").value = MERCADO_PAGO_LINK;
-  document.getElementById("adminWorkSlots").value = WORK_SLOTS.join(", ");
+  
+  const currentWorkStudio = document.getElementById("adminWorkSlotStudio").value;
+  document.getElementById("adminWorkSlots").value = WORK_SLOTS[currentWorkStudio].join(", ");
   
   if(isCloudEnabled()) {
     document.getElementById("adminSupabaseUrl").value = SUPABASE_URL;
@@ -408,8 +469,17 @@ if(currentPage === "reservar") {
     slotsGrid.innerHTML = ""; 
     const allBooked = JSON.parse(localStorage.getItem("bookedSlots") || "{}")[dStr] || [];
     
-    // Priorizar horarios específicos por fecha
-    const daySlots = CUSTOM_WORK_DAYS[dStr] || WORK_SLOTS;
+    // Priorizar horarios específicos por fecha y estudio
+    let daySlots = WORK_SLOTS[selStudio];
+    const custom = CUSTOM_WORK_DAYS[dStr];
+    if (custom) {
+      if (Array.isArray(custom)) {
+        // Compatibilidad con formato antiguo
+        daySlots = custom;
+      } else if (custom[selStudio]) {
+        daySlots = custom[selStudio];
+      }
+    }
     
     daySlots.forEach(t => {
       const b = document.createElement("button"); b.className="slot-button"; b.textContent=t;
@@ -537,10 +607,13 @@ const enableVisualEditing = () => {
     };
   });
 
-  document.getElementById('adminSaveVisual').onclick = () => { saveAllChanges(); location.reload(); };
+  document.getElementById('adminSaveVisual').onclick = async () => { 
+    await saveAllChanges(); 
+    location.reload(); 
+  };
 };
 
-const saveAllChanges = () => {
+const saveAllChanges = async () => {
   const pId = currentPage || 'global'; const changes = { texts: {}, images: {} };
   
   // Guardar textos
@@ -566,10 +639,9 @@ const saveAllChanges = () => {
   console.log("Guardando cambios para:", pId, changes);
   localStorage.setItem(`miri_changes_${pId}`, JSON.stringify(changes));
   if(isCloudEnabled()) {
-    cloudUpsert("page_changes", {id:pId, data:changes}).then(res => {
-      if(res) alert("¡Cambios guardados con éxito en la nube!");
-      else alert("Error al guardar en la nube, se guardó localmente.");
-    });
+    const res = await cloudUpsert("page_changes", {id:pId, data:changes});
+    if(res) alert("¡Cambios guardados con éxito en la nube!");
+    else alert("Error al guardar en la nube, se guardó localmente.");
   } else {
     alert("Guardado localmente (Nube no configurada).");
   }
@@ -606,8 +678,13 @@ const syncWithCloud = (manual = false) => {
         d.forEach(i => {
           if(i.id === "schedule") {
             if(i.data && i.data.slots) {
-              localStorage.setItem("miri_work_slots", JSON.stringify(i.data.slots));
-              WORK_SLOTS = i.data.slots;
+              let incomingSlots = i.data.slots;
+              // Compatibilidad
+              if (Array.isArray(incomingSlots)) {
+                incomingSlots = { "Monserrat": incomingSlots, "José Marmol": [...DEFAULT_SLOTS] };
+              }
+              localStorage.setItem("miri_work_slots", JSON.stringify(incomingSlots));
+              WORK_SLOTS = incomingSlots;
             }
             if(i.data && i.data.custom_days) {
               localStorage.setItem("miri_custom_days", JSON.stringify(i.data.custom_days));
