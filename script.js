@@ -2,6 +2,71 @@ let WHATSAPP_NUMBER = localStorage.getItem("miri_wa_number") || "5491144123280";
 const DEFAULT_MESSAGE = "Hola, quiero reservar un turno para extensiones de pestañas";
 let MERCADO_PAGO_LINK = localStorage.getItem("miri_mp_link") || "https://mpago.la/1iJbsQy";
 
+// --- Configuración de Base de Datos (Supabase) para Sincronización Automática ---
+// IMPORTANTE: Podés dejar estos campos vacíos y cargarlos desde el panel MiriAdmin, 
+// o ponerlos acá directamente para que funcionen en todos los dispositivos al instante.
+const CLOUD_URL = "https://hugbaugzsntojbotjblz.supabase.co"; 
+const CLOUD_KEY = ""; // Pegá acá tu llave larga (anon public) que copiaste de Supabase
+
+let SUPABASE_URL = localStorage.getItem("miri_supabase_url") || CLOUD_URL;
+let SUPABASE_KEY = localStorage.getItem("miri_supabase_key") || CLOUD_KEY;
+
+const isCloudEnabled = () => SUPABASE_URL !== "" && SUPABASE_KEY !== "";
+
+const cloudFetch = async (table) => {
+  if (!isCloudEnabled()) return null;
+  try {
+    const response = await fetch(`${SUPABASE_URL}/rest/v1/${table}?select=*`, {
+      headers: {
+        "apikey": SUPABASE_KEY,
+        "Authorization": `Bearer ${SUPABASE_KEY}`
+      }
+    });
+    if (!response.ok) return null;
+    return await response.json();
+  } catch (e) {
+    console.error("Error al cargar de la nube:", e);
+    return null;
+  }
+};
+
+const cloudUpsert = async (table, data) => {
+  if (!isCloudEnabled()) return false;
+  try {
+    const response = await fetch(`${SUPABASE_URL}/rest/v1/${table}`, {
+      method: "POST",
+      headers: {
+        "apikey": SUPABASE_KEY,
+        "Authorization": `Bearer ${SUPABASE_KEY}`,
+        "Content-Type": "application/json",
+        "Prefer": "resolution=merge-duplicates"
+      },
+      body: JSON.stringify(data)
+    });
+    return response.ok;
+  } catch (e) {
+    console.error("Error al guardar en la nube:", e);
+    return false;
+  }
+};
+
+const cloudDelete = async (table, id) => {
+  if (!isCloudEnabled()) return false;
+  try {
+    const response = await fetch(`${SUPABASE_URL}/rest/v1/${table}?id=eq.${id}`, {
+      method: "DELETE",
+      headers: {
+        "apikey": SUPABASE_KEY,
+        "Authorization": `Bearer ${SUPABASE_KEY}`
+      }
+    });
+    return response.ok;
+  } catch (e) {
+    console.error("Error al borrar de la nube:", e);
+    return false;
+  }
+};
+
 const menuToggle = document.querySelector(".menu-toggle");
 const nav = document.querySelector(".nav");
 const waLinks = document.querySelectorAll(".wa-link");
@@ -278,8 +343,24 @@ if (currentPage === "reservar") {
     // 1. Guardar en localStorage como reservado (simulación de cierre de horario)
     const bookedSlots = JSON.parse(localStorage.getItem("bookedSlots") || "{}");
     if (!bookedSlots[dateString]) bookedSlots[dateString] = [];
-    bookedSlots[dateString].push(selectedTime);
-    localStorage.setItem("bookedSlots", JSON.stringify(bookedSlots));
+    
+    // Solo agregar si no existe ya
+    if (!bookedSlots[dateString].includes(selectedTime)) {
+      bookedSlots[dateString].push(selectedTime);
+      localStorage.setItem("bookedSlots", JSON.stringify(bookedSlots));
+      
+      // Sincronizar con la nube si está habilitada
+      if (isCloudEnabled()) {
+        cloudUpsert("bookings", { 
+          id: `${dateString}-${selectedTime}`, // ID único para evitar duplicados
+          date: dateString, 
+          time: selectedTime,
+          service: servicioElegido
+        }).then(ok => {
+          if (ok) console.log("Turno guardado en la nube automáticamente.");
+        });
+      }
+    }
 
     // 2. Preparar mensaje de WhatsApp con el servicio
     const message = `Hola! Quiero confirmar mi turno para ${servicioElegido} el día ${dateString} a las ${selectedTime}. Ya realicé el pago de la seña.`;
@@ -309,14 +390,29 @@ const injectAdminUI = () => {
         <h2>MiriAdmin Panel</h2>
         
         <div class="admin-section">
-          <h3>Sincronización con GitHub</h3>
-          <p>Para que tus cambios (textos, fotos, configuración) se vean en internet para todos, debes descargar el archivo de cambios y subirlo a tu repositorio de GitHub.</p>
-          <div style="display:flex; gap:10px; flex-wrap:wrap;">
-            <button class="button button-secondary" id="adminDownloadChanges">Descargar Archivo de Cambios</button>
-            <button class="button button-secondary" id="adminSyncFromCloud" style="border-color: #d98aa7; color: #d98aa7;">Cargar desde GitHub (Nube)</button>
-            <button class="button" id="adminResetLocal" style="background:#e53e3e; color:white; border:none; padding: 0.8rem 1.5rem; border-radius: 12px; font-weight: bold; cursor: pointer;">Borrar Cambios Locales (Reiniciar PC)</button>
+          <h3>Sincronización Automática (Nube Real)</h3>
+          <p>Para que todo se guarde automáticamente sin descargar archivos, te recomiendo usar <strong>Supabase</strong> (es gratis). Si ponés tus llaves acá, el sistema funcionará solo.</p>
+          <div class="admin-grid">
+            <div class="admin-field">
+              <label for="adminSupabaseUrl">URL de Supabase</label>
+              <input type="text" id="adminSupabaseUrl" placeholder="https://xyz.supabase.co">
+            </div>
+            <div class="admin-field">
+              <label for="adminSupabaseKey">Key (Anon Public Key)</label>
+              <input type="text" id="adminSupabaseKey" placeholder="eyJhbGciOiJIUzI1NiI...">
+            </div>
           </div>
-          <p style="font-size:0.8rem; margin-top:10px;">⚠️ Nota: Luego sube este archivo a GitHub con el nombre <code>miri_data.json</code> en la misma carpeta que tus otros archivos.</p>
+          <button class="button button-primary" id="adminSaveCloudConfig" style="margin-top:10px; background: #4a5568;">Guardar y Activar Nube</button>
+        </div>
+
+        <div class="admin-section">
+          <h3>Sincronización Manual (GitHub)</h3>
+          <p>Si no usás Supabase, debés descargar y subir el archivo a GitHub manualmente cada vez que hagas un cambio importante.</p>
+          <div style="display:flex; gap:10px; flex-wrap:wrap;">
+            <button class="button button-secondary" id="adminDownloadChanges" style="background: #d98aa7; color: white; border: none;">1. Descargar Archivo de Cambios</button>
+            <button class="button button-secondary" id="adminSyncFromCloud" style="border-color: #d98aa7; color: #d98aa7;">Restaurar desde GitHub (Nube)</button>
+            <button class="button" id="adminResetLocal" style="background:#e53e3e; color:white; border:none; padding: 0.8rem 1.5rem; border-radius: 12px; font-weight: bold; cursor: pointer;">Borrar TODO y Reiniciar PC</button>
+          </div>
         </div>
 
         <div class="admin-section">
@@ -369,6 +465,22 @@ const injectAdminUI = () => {
   const adminDownloadBtn = document.getElementById("adminDownloadChanges");
   const adminSyncBtn = document.getElementById("adminSyncFromCloud");
   const adminResetBtn = document.getElementById("adminResetLocal");
+  const adminSaveCloudBtn = document.getElementById("adminSaveCloudConfig");
+
+  if (adminSaveCloudBtn) {
+    adminSaveCloudBtn.addEventListener("click", () => {
+      const url = document.getElementById("adminSupabaseUrl").value.trim();
+      const key = document.getElementById("adminSupabaseKey").value.trim();
+      if (url && key) {
+        localStorage.setItem("miri_supabase_url", url);
+        localStorage.setItem("miri_supabase_key", key);
+        alert("Configuración de nube guardada. El sistema ahora intentará sincronizar automáticamente.");
+        location.reload();
+      } else {
+        alert("Por favor, completa ambos campos.");
+      }
+    });
+  }
 
   if (adminSyncBtn) {
     adminSyncBtn.addEventListener("click", () => {
@@ -380,13 +492,16 @@ const injectAdminUI = () => {
 
   if (adminResetBtn) {
     adminResetBtn.addEventListener("click", () => {
-      if (confirm("¿Estás segura? Esto borrará todos los cambios que hiciste en esta PC y restaurará el diseño original. No afecta a lo que ya subiste a GitHub.")) {
+      if (confirm("¿Estás segura? Esto borrará todos los cambios que hiciste en esta PC y restaurará el diseño original (lo que está en GitHub).")) {
         // Borrar cambios de todas las páginas del localStorage
         ['inicio', 'servicios', 'galeria', 'opiniones', 'contacto', 'reservar', 'global'].forEach(p => {
           localStorage.removeItem(`miri_changes_${p}`);
         });
         localStorage.removeItem("miri_wa_number");
         localStorage.removeItem("miri_mp_link");
+        localStorage.removeItem("bookedSlots"); 
+        localStorage.removeItem("miri_supabase_url"); // También borrar la nube
+        localStorage.removeItem("miri_supabase_key");
         location.reload();
       }
     });
@@ -455,8 +570,25 @@ const injectAdminUI = () => {
         localStorage.setItem("miri_mp_link", newMp);
       }
       
-      alert("Configuración guardada correctamente.");
-      location.reload();
+      // Sincronizar configuración con la nube si está habilitada
+      if (isCloudEnabled()) {
+        cloudUpsert("config", {
+          id: 1, // Fila única de configuración
+          wa: newWa || WHATSAPP_NUMBER,
+          mp: newMp || MERCADO_PAGO_LINK,
+          updated_at: new Date().toISOString()
+        }).then(ok => {
+          if (ok) {
+            alert("Configuración guardada en la PC y en la Nube.");
+            location.reload();
+          } else {
+            alert("Guardado en la PC, pero hubo un error con la Nube. Revisá tus llaves.");
+          }
+        });
+      } else {
+        alert("Configuración guardada correctamente en esta PC.");
+        location.reload();
+      }
     });
   }
 
@@ -507,6 +639,11 @@ const openAdminPanel = () => {
   // Cargar valores actuales
   document.getElementById("adminWaNumber").value = WHATSAPP_NUMBER;
   document.getElementById("adminMpLink").value = MERCADO_PAGO_LINK;
+  
+  if (isCloudEnabled()) {
+    document.getElementById("adminSupabaseUrl").value = SUPABASE_URL;
+    document.getElementById("adminSupabaseKey").value = SUPABASE_KEY;
+  }
   
   renderAdminBookings();
 };
@@ -748,6 +885,17 @@ const saveAllChanges = () => {
 
   try {
     localStorage.setItem(`miri_changes_${pageId}`, JSON.stringify(changes));
+    
+    // Sincronizar cambios visuales con la nube si está habilitada
+    if (isCloudEnabled()) {
+      cloudUpsert("page_changes", {
+        id: pageId, // Guardar cambios por página
+        data: changes,
+        updated_at: new Date().toISOString()
+      }).then(ok => {
+        if (ok) console.log(`Cambios visuales de la página ${pageId} guardados en la nube.`);
+      });
+    }
   } catch (e) {
     alert("Error: Las imágenes son muy pesadas. Usa imágenes más pequeñas.");
   }
@@ -800,7 +948,66 @@ const applySavedChanges = () => {
 };
 
 const syncWithCloud = (force = false) => {
-  return fetch('miri_data.json')
+  // 0. Si hay una base de datos real (Supabase), priorizarla
+  if (isCloudEnabled()) {
+    cloudFetch("bookings").then(data => {
+      if (data) {
+        const cloudBookings = {};
+        data.forEach(b => {
+          if (!cloudBookings[b.date]) cloudBookings[b.date] = [];
+          if (!cloudBookings[b.date].includes(b.time)) cloudBookings[b.date].push(b.time);
+        });
+        
+        const localBookings = JSON.parse(localStorage.getItem("bookedSlots") || "{}");
+        const merged = { ...cloudBookings };
+        
+        // Mezclar locales por si hay alguno nuevo
+        Object.keys(localBookings).forEach(date => {
+          if (!merged[date]) merged[date] = localBookings[date];
+          else {
+            merged[date] = Array.from(new Set([...merged[date], ...localBookings[date]]));
+          }
+        });
+        
+        localStorage.setItem("bookedSlots", JSON.stringify(merged));
+        if (currentPage === "reservar") renderCalendar();
+      }
+    });
+    
+    cloudFetch("config").then(data => {
+      if (data && data.length > 0) {
+        const config = data[0]; // Asumimos una fila de config
+        if (config.wa) {
+          localStorage.setItem("miri_wa_number", config.wa);
+          WHATSAPP_NUMBER = config.wa;
+        }
+        if (config.mp) {
+          localStorage.setItem("miri_mp_link", config.mp);
+          MERCADO_PAGO_LINK = config.mp;
+        }
+      }
+    });
+
+    // Cargar cambios visuales desde la nube
+    cloudFetch("page_changes").then(data => {
+      if (data && data.length > 0) {
+        data.forEach(item => {
+          const pageId = item.id;
+          const remoteData = item.data;
+          const localStr = localStorage.getItem(`miri_changes_${pageId}`);
+          
+          // Si no hay cambios locales, o si los remotos son más nuevos, actualizamos
+          // Para simplificar, priorizaremos la nube si está habilitada
+          localStorage.setItem(`miri_changes_${pageId}`, JSON.stringify(remoteData));
+        });
+        applySavedChanges();
+      }
+    });
+  }
+
+  // 1. Sincronización manual/fallback con miri_data.json
+  const timestamp = new Date().getTime();
+  return fetch(`miri_data.json?v=${timestamp}`)
     .then(response => {
       if (!response.ok) throw new Error("No data file");
       return response.json();
@@ -809,22 +1016,64 @@ const syncWithCloud = (force = false) => {
       if (data) {
         let updated = false;
         
-        // Config y bookings
+        // Sincronizar configuración general
         if (data.config) {
-          if (data.config.wa) localStorage.setItem("miri_wa_number", data.config.wa);
-          if (data.config.mp) localStorage.setItem("miri_mp_link", data.config.mp);
+          const localWa = localStorage.getItem("miri_wa_number");
+          const localMp = localStorage.getItem("miri_mp_link");
+
+          // Solo actualizamos si force es true o si NO hay datos locales previos
+          if (force || !localWa) {
+            if (data.config.wa) {
+              localStorage.setItem("miri_wa_number", data.config.wa);
+              WHATSAPP_NUMBER = data.config.wa;
+              updated = true;
+            }
+          }
+          if (force || !localMp) {
+            if (data.config.mp) {
+              localStorage.setItem("miri_mp_link", data.config.mp);
+              MERCADO_PAGO_LINK = data.config.mp;
+              updated = true;
+            }
+          }
         }
+        
+        // Sincronizar turnos (MEZCLAR en lugar de sobrescribir)
         if (data.bookings) {
-          localStorage.setItem("bookedSlots", JSON.stringify(data.bookings));
+          const localBookings = JSON.parse(localStorage.getItem("bookedSlots") || "{}");
+          const remoteBookings = data.bookings;
+          
+          // Mezclamos: los remotos son la base, pero mantenemos los locales que no estén en remotos
+          // En una app estática, esto es lo mejor que podemos hacer para evitar que "desaparezcan"
+          // turnos recién reservados antes de subirlos a GitHub.
+          const mergedBookings = { ...remoteBookings };
+          
+          Object.keys(localBookings).forEach(date => {
+            if (!mergedBookings[date]) {
+              mergedBookings[date] = localBookings[date];
+              updated = true;
+            } else {
+              // Si la fecha ya existe, mezclamos los horarios
+              const localSlots = localBookings[date];
+              const remoteSlots = mergedBookings[date];
+              const combinedSlots = Array.from(new Set([...remoteSlots, ...localSlots]));
+              
+              if (combinedSlots.length > remoteSlots.length) {
+                mergedBookings[date] = combinedSlots;
+                updated = true;
+              }
+            }
+          });
+
+          localStorage.setItem("bookedSlots", JSON.stringify(mergedBookings));
         }
 
-        // Sincronizar cambios de páginas
+        // Sincronizar cambios visuales de cada página
         if (data.changes) {
           Object.keys(data.changes).forEach(p => {
             const local = localStorage.getItem(`miri_changes_${p}`);
             const remoteStr = JSON.stringify(data.changes[p]);
             
-            // Si forzamos, o si no hay local, cargamos el remoto
             if (force || !local) {
               localStorage.setItem(`miri_changes_${p}`, remoteStr);
               updated = true;
@@ -835,15 +1084,17 @@ const syncWithCloud = (force = false) => {
         if (updated) {
           applySavedChanges();
           if (force) {
-            alert("Sincronización completada.");
+            alert("¡Sincronización completada con éxito!");
             location.reload();
           }
+        } else if (force) {
+          alert("Tu versión local ya está actualizada.");
         }
       }
     })
     .catch(err => {
-      console.log("Sin cambios remotos (o error al conectar).");
-      if (force) alert("No se pudo conectar con GitHub para cargar los datos.");
+      console.log("Aviso: No se cargaron cambios desde GitHub (archivo no encontrado o sin internet).");
+      if (force) alert("No se pudo conectar con GitHub. Verifica que hayas subido el archivo miri_data.json.");
     });
 };
 
@@ -886,6 +1137,14 @@ window.releaseSlot = (date, time) => {
     bookedSlots[date] = bookedSlots[date].filter(t => t !== time);
     if (bookedSlots[date].length === 0) delete bookedSlots[date];
     localStorage.setItem("bookedSlots", JSON.stringify(bookedSlots));
+    
+    // También borrar de la nube si está habilitada
+    if (isCloudEnabled()) {
+      cloudDelete("bookings", `${date}-${time}`).then(ok => {
+        if (ok) console.log("Turno liberado en la nube automáticamente.");
+      });
+    }
+
     renderAdminBookings();
     
     // Actualizar el calendario si estamos en la página de reservas
