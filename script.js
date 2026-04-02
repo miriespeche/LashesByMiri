@@ -672,12 +672,25 @@ const applySavedChanges = () => {
 
   const s = localStorage.getItem(`miri_changes_${currentPage || 'global'}`); if(!s) return;
   const d = JSON.parse(s); 
-  if (d.texts) Object.keys(d.texts).forEach(p => { const el = document.querySelector(p); if(el) el.innerHTML = d.texts[p]; });
+  if (d.texts) Object.keys(d.texts).forEach(p => { 
+    const el = document.querySelector(p); 
+    if (el && d.texts[p] !== undefined && d.texts[p] !== null) {
+      el.innerHTML = d.texts[p]; 
+    }
+  });
   if (d.images) Object.keys(d.images).forEach(p => { 
     const el = document.querySelector(p); 
     if (el) {
-      if (el.tagName === 'IMG') el.src = d.images[p];
-      else el.style.backgroundImage = `url("${d.images[p]}")`;
+      let src = d.images[p];
+      // Si el formato es un objeto (como en miri_data.json), extraemos la URL
+      if (typeof src === 'object' && src !== null && src.src) {
+        src = src.src;
+      }
+      // Solo aplicamos si es un string válido (URL o Base64)
+      if (typeof src === 'string') {
+        if (el.tagName === 'IMG') el.src = src;
+        else el.style.backgroundImage = `url("${src}")`;
+      }
     }
   });
 };
