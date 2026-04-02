@@ -65,35 +65,36 @@
 
             <div id="bookingCalendar" style="display: none;">
               <div class="calendar-wrapper">
-              <div class="calendar-header">
-                <button id="prevMonth">&lt;</button>
-                <h2 id="currentMonth">Mes Año</h2>
-                <button id="nextMonth">&gt;</button>
-              </div>
-              <div class="calendar-grid" id="calendarGrid">
-                <!-- Los días se generarán con JS -->
-              </div>
-            </div>
-
-            <div class="slots-wrapper" id="slotsContainer" style="display: none;">
-              <h3>Horarios disponibles para el <span id="selectedDateText">--/--</span></h3>
-              <div class="slots-grid" id="slotsGrid">
-                <!-- Los horarios se generarán con JS -->
-              </div>
-            </div>
-
-            <div class="booking-summary" id="bookingSummary" style="display: none;">
-              <h3>Resumen de tu reserva</h3>
-              <div class="booking-form">
-                <div class="form-group">
-                  <label for="clientName">Tu Nombre</label>
-                  <input type="text" id="clientName" placeholder="Escribí tu nombre completo" required>
+                <div class="calendar-header">
+                  <button id="prevMonth">&lt;</button>
+                  <h2 id="currentMonth">Mes Año</h2>
+                  <button id="nextMonth">&gt;</button>
+                </div>
+                <div class="calendar-grid" id="calendarGrid">
+                  <!-- Los días se generarán con JS -->
                 </div>
               </div>
-              <p>Día: <strong id="summaryDate"></strong></p>
-              <p>Horario: <strong id="summaryTime"></strong></p>
-              <p class="summary-note">Para confirmar el turno, es necesario realizar el pago de la seña a través de Mercado Pago.</p>
-              <button class="button button-primary" id="confirmBooking">Pagar y Confirmar por WhatsApp</button>
+
+              <div class="slots-wrapper" id="slotsContainer" style="display: none;">
+                <h3>Horarios disponibles para el <span id="selectedDateText">--/--</span></h3>
+                <div class="slots-grid" id="slotsGrid">
+                  <!-- Los horarios se generarán con JS -->
+                </div>
+              </div>
+
+              <div class="booking-summary" id="bookingSummary" style="display: none;">
+                <h3>Resumen de tu reserva</h3>
+                <div class="booking-form">
+                  <div class="form-group">
+                    <label for="clientName">Tu Nombre</label>
+                    <input type="text" id="clientName" placeholder="Escribí tu nombre completo" required>
+                  </div>
+                </div>
+                <p>Día: <strong id="summaryDate"></strong></p>
+                <p>Horario: <strong id="summaryTime"></strong></p>
+                <p class="summary-note">Para confirmar el turno, es necesario realizar el pago de la seña a través de Mercado Pago.</p>
+                <button class="button button-primary" id="confirmBooking">Pagar y Confirmar por WhatsApp</button>
+              </div>
             </div>
           </div>
         </div>
