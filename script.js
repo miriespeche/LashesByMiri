@@ -2,6 +2,7 @@ let WHATSAPP_NUMBER = localStorage.getItem("miri_wa_number") || "5491144123280";
 const DEFAULT_MESSAGE = "Hola, quiero reservar un turno para extensiones de pestañas";
 let MERCADO_PAGO_LINK = localStorage.getItem("miri_mp_link") || "https://mpago.la/1iJbsQy";
 let WORK_SLOTS = JSON.parse(localStorage.getItem("miri_work_slots") || '["09:00", "10:00", "11:00", "12:00", "14:00", "15:00", "16:00", "17:00", "18:00"]');
+let CUSTOM_WORK_DAYS = JSON.parse(localStorage.getItem("miri_custom_days") || "{}");
 
 // --- Configuración de Base de Datos (Supabase) ---
 const CLOUD_URL = "https://hugbaugzsntojbotjblz.supabase.co"; 
@@ -106,14 +107,23 @@ const injectAdminUI = () => {
           <button class="button button-primary btn-save-all" id="adminSaveConfig">Guardar</button>
         </div>
         <div class="admin-section" id="adminSectionSlots">
-          <h3>Horarios de Trabajo</h3>
+          <h3>Horarios de Trabajo (Generales)</h3>
           <p style="font-size:0.85rem; color:#666; margin-bottom:10px;">Escribe los horarios separados por coma (ej: 09:00, 10:30, 14:00).</p>
           <div class="admin-grid">
             <div class="admin-field" style="grid-column: span 2;">
               <input type="text" id="adminWorkSlots" placeholder="09:00, 10:00, 11:00...">
             </div>
           </div>
-          <button class="button button-primary" id="adminSaveSlots" style="margin-top:10px; background:#d98aa7;">Actualizar Horarios</button>
+          <button class="button button-primary" id="adminSaveSlots" style="margin-top:10px; background:#d98aa7;">Actualizar Horarios Generales</button>
+        </div>
+        <div class="admin-section">
+          <h3>Horarios por Fecha Específica</h3>
+          <p style="font-size:0.85rem; color:#666; margin-bottom:10px;">Define horarios únicos para un día puntual.</p>
+          <div class="admin-grid">
+            <div class="admin-field"><label>Fecha</label><input type="date" id="adminCustomDate"></div>
+            <div class="admin-field"><label>Horas (ej: 10:00, 11:00)</label><input type="text" id="adminCustomSlots" placeholder="Si dejas vacío, borra el día"></div>
+          </div>
+          <button class="button button-primary" id="adminSaveCustomDay" style="margin-top:10px; background:#4a5568;">Guardar Día Específico</button>
         </div>
         <div class="admin-section">
           <h3>Turnos</h3>
@@ -138,7 +148,7 @@ const injectAdminUI = () => {
     const mp = document.getElementById("adminMpLink").value.trim();
     if(wa) localStorage.setItem("miri_wa_number", wa);
     if(mp) localStorage.setItem("miri_mp_link", mp);
-    if(isCloudEnabled()) cloudUpsert("config", {id:1, wa:wa||WHATSAPP_NUMBER, mp:mp||MERCADO_PAGO_LINK, slots: WORK_SLOTS}).then(() => location.reload());
+    if(isCloudEnabled()) cloudUpsert("config", {id:1, wa:wa||WHATSAPP_NUMBER, mp:mp||MERCADO_PAGO_LINK, slots: WORK_SLOTS, custom_days: CUSTOM_WORK_DAYS}).then(() => location.reload());
     else location.reload();
   };
   document.getElementById("adminSaveSlots").onclick = () => {
@@ -148,10 +158,30 @@ const injectAdminUI = () => {
       if(slotsArr.length > 0) {
         localStorage.setItem("miri_work_slots", JSON.stringify(slotsArr));
         WORK_SLOTS = slotsArr;
-        if(isCloudEnabled()) cloudUpsert("config", {id:1, wa:WHATSAPP_NUMBER, mp:MERCADO_PAGO_LINK, slots: WORK_SLOTS}).then(() => location.reload());
+        if(isCloudEnabled()) cloudUpsert("config", {id:1, wa:WHATSAPP_NUMBER, mp:MERCADO_PAGO_LINK, slots: WORK_SLOTS, custom_days: CUSTOM_WORK_DAYS}).then(() => location.reload());
         else location.reload();
       }
     }
+  };
+  document.getElementById("adminSaveCustomDay").onclick = () => {
+    const rawDate = document.getElementById("adminCustomDate").value;
+    if(!rawDate) return alert("Selecciona una fecha");
+    // Formatear a dd/mm/aaaa como se usa en bookedSlots
+    const [y, m, d] = rawDate.split("-");
+    const dStr = `${parseInt(d)}/${parseInt(m)}/${y}`;
+    const rawSlots = document.getElementById("adminCustomSlots").value.trim();
+    
+    const newCustomDays = {...CUSTOM_WORK_DAYS};
+    if(!rawSlots) {
+      delete newCustomDays[dStr];
+    } else {
+      newCustomDays[dStr] = rawSlots.split(",").map(s => s.trim()).filter(s => s !== "");
+    }
+    
+    localStorage.setItem("miri_custom_days", JSON.stringify(newCustomDays));
+    CUSTOM_WORK_DAYS = newCustomDays;
+    if(isCloudEnabled()) cloudUpsert("config", {id:1, wa:WHATSAPP_NUMBER, mp:MERCADO_PAGO_LINK, slots: WORK_SLOTS, custom_days: CUSTOM_WORK_DAYS}).then(() => location.reload());
+    else location.reload();
   };
   document.getElementById("adminDownloadChanges").onclick = () => {
     const data = { config: { wa: WHATSAPP_NUMBER, mp: MERCADO_PAGO_LINK }, bookings: JSON.parse(localStorage.getItem("bookedSlots") || "{}"), changes: {} };
@@ -300,7 +330,10 @@ if(currentPage === "reservar") {
     slotsGrid.innerHTML = ""; 
     const allBooked = JSON.parse(localStorage.getItem("bookedSlots") || "{}")[dStr] || [];
     
-    WORK_SLOTS.forEach(t => {
+    // Priorizar horarios específicos por fecha
+    const daySlots = CUSTOM_WORK_DAYS[dStr] || WORK_SLOTS;
+    
+    daySlots.forEach(t => {
       const b = document.createElement("button"); b.className="slot-button"; b.textContent=t;
       
       // Verificar si el slot está ocupado para el estudio seleccionado
@@ -489,6 +522,10 @@ const syncWithCloud = (manual = false) => {
         if(d[0].slots) {
           localStorage.setItem("miri_work_slots", JSON.stringify(d[0].slots));
           WORK_SLOTS = d[0].slots;
+        }
+        if(d[0].custom_days) {
+          localStorage.setItem("miri_custom_days", JSON.stringify(d[0].custom_days));
+          CUSTOM_WORK_DAYS = d[0].custom_days;
         }
       } 
     });
