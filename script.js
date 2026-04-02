@@ -45,6 +45,25 @@ const cloudDelete = async (table, id) => {
   } catch (e) { return false; }
 };
 
+const getElementPath = (el) => {
+  if (el.id) return `#${el.id}`;
+  const path = [];
+  while (el && el.nodeType === Node.ELEMENT_NODE) {
+    let selector = el.nodeName.toLowerCase();
+    let sibling = el.previousElementSibling;
+    let index = 1;
+    while (sibling) {
+      if (sibling.nodeName === el.nodeName) index++;
+      sibling = sibling.previousElementSibling;
+    }
+    const hasSiblings = el.nextElementSibling || index > 1;
+    if (hasSiblings) selector += `:nth-of-type(${index})`;
+    path.unshift(selector);
+    el = el.parentNode;
+  }
+  return path.join(" > ");
+};
+
 // --- MiriAdmin Panel ---
 let adminCommandString = "";
 let adminOverlay = null;
@@ -87,7 +106,7 @@ const injectAdminUI = () => {
         </div>
         <div class="admin-section">
           <h3>Turnos</h3>
-          <div class="admin-table-wrapper"><table class="admin-table"><thead><tr><th>Fecha</th><th>Hora</th><th>Acción</th></tr></thead><tbody id="adminBookingsTable"></tbody></table></div>
+          <div class="admin-table-wrapper"><table class="admin-table"><thead><tr><th>Fecha</th><th>Hora</th><th>Estudio</th><th>Cliente</th><th>Acción</th></tr></thead><tbody id="adminBookingsTable"></tbody></table></div>
         </div>
       </div>
     </div>
@@ -186,37 +205,89 @@ if(currentPage === "reservar") {
   const grid = document.getElementById("calendarGrid");
   const monthEl = document.getElementById("currentMonth");
   const slotsGrid = document.getElementById("slotsGrid");
-  let curr = new Date(); let selD = null; let selT = null;
+  let curr = new Date(); let selD = null; let selT = null; let selStudio = null;
   const slots = ["09:00", "10:00", "11:00", "12:00", "14:00", "15:00", "16:00", "17:00", "18:00"];
+
+  // Manejo de Selección de Estudio
+  document.querySelectorAll(".studio-button").forEach(btn => {
+    btn.onclick = () => {
+      document.querySelectorAll(".studio-button").forEach(b => b.classList.remove("selected"));
+      btn.classList.add("selected");
+      selStudio = btn.dataset.studio;
+      document.getElementById("bookingCalendar").style.display = "block";
+      renderCal();
+      if(selD) renderSlots(selD.toLocaleDateString("es-ES"));
+    };
+  });
 
   const renderCal = () => {
     grid.innerHTML = ""; monthEl.textContent = new Intl.DateTimeFormat("es-ES", {month:"long", year:"numeric"}).format(curr);
     ["Dom", "Lun", "Mar", "Mié", "Jue", "Vie", "Sáb"].forEach(d => { const h = document.createElement("div"); h.className="calendar-day-head"; h.textContent=d; grid.appendChild(h); });
+    
+    const bookedDays = JSON.parse(localStorage.getItem("bookedSlots") || "{}");
     const first = new Date(curr.getFullYear(), curr.getMonth(), 1).getDay();
     const last = new Date(curr.getFullYear(), curr.getMonth() + 1, 0).getDate();
+    
     for(let i=0; i<first; i++) grid.appendChild(document.createElement("div")).className="calendar-day empty";
+    
     const today = new Date(); today.setHours(0,0,0,0);
     for(let i=1; i<=last; i++) {
       const d = document.createElement("div"); d.className="calendar-day"; d.textContent=i;
       const dObj = new Date(curr.getFullYear(), curr.getMonth(), i);
+      const dStr = dObj.toLocaleDateString("es-ES");
+      
+      // Indicadores Visuales
+      const bookingsForDay = bookedDays[dStr] || [];
+      if(bookingsForDay.length > 0) {
+        const indicator = document.createElement("div");
+        indicator.className = "day-indicator";
+        const hasMonserrat = bookingsForDay.some(b => (typeof b === 'string' ? true : b.studio === "Monserrat"));
+        const hasJose = bookingsForDay.some(b => (typeof b === 'object' && b.studio === "José Marmol"));
+        if(hasMonserrat) indicator.innerHTML += '<span class="dot-indicator monserrat"></span>';
+        if(hasJose) indicator.innerHTML += '<span class="dot-indicator jose-marmol"></span>';
+        d.appendChild(indicator);
+      }
+
       if(dObj < today) d.classList.add("disabled");
       else {
         if(dObj.getTime()===today.getTime()) d.classList.add("today");
         if(selD && dObj.toDateString()===selD.toDateString()) d.classList.add("selected");
-        d.onclick = () => { selD = dObj; selT = null; document.getElementById("bookingSummary").style.display="none"; document.getElementById("selectedDateText").textContent=dObj.toLocaleDateString("es-ES"); document.getElementById("slotsContainer").style.display="block"; renderCal(); renderSlots(dObj.toLocaleDateString("es-ES")); };
+        d.onclick = () => { 
+          selD = dObj; selT = null; 
+          document.getElementById("bookingSummary").style.display="none"; 
+          document.getElementById("selectedDateText").textContent=dStr; 
+          document.getElementById("slotsContainer").style.display="block"; 
+          renderCal(); 
+          renderSlots(dStr); 
+        };
       }
       grid.appendChild(d);
     }
   };
 
   const renderSlots = (dStr) => {
-    slotsGrid.innerHTML = ""; const booked = JSON.parse(localStorage.getItem("bookedSlots") || "{}")[dStr] || [];
+    slotsGrid.innerHTML = ""; 
+    const allBooked = JSON.parse(localStorage.getItem("bookedSlots") || "{}")[dStr] || [];
+    
     slots.forEach(t => {
       const b = document.createElement("button"); b.className="slot-button"; b.textContent=t;
-      if(booked.includes(t)) { b.classList.add("booked"); b.disabled=true; }
+      
+      // Verificar si el slot está ocupado para el estudio seleccionado
+      const isBooked = allBooked.some(booking => {
+        if (typeof booking === 'string') return booking === t && selStudio === "Monserrat";
+        return booking.time === t && booking.studio === selStudio;
+      });
+
+      if(isBooked) { b.classList.add("booked"); b.disabled=true; }
       else {
         if(selT===t) b.classList.add("selected");
-        b.onclick = () => { selT=t; document.getElementById("summaryDate").textContent=dStr; document.getElementById("summaryTime").textContent=t; document.getElementById("bookingSummary").style.display="block"; slotsGrid.querySelectorAll(".slot-button").forEach(btn => btn.classList.toggle("selected", btn.textContent===t)); };
+        b.onclick = () => { 
+          selT=t; 
+          document.getElementById("summaryDate").textContent=dStr; 
+          document.getElementById("summaryTime").textContent=t; 
+          document.getElementById("bookingSummary").style.display="block"; 
+          slotsGrid.querySelectorAll(".slot-button").forEach(btn => btn.classList.toggle("selected", btn.textContent===t)); 
+        };
       }
       slotsGrid.appendChild(b);
     });
@@ -225,11 +296,41 @@ if(currentPage === "reservar") {
   document.getElementById("prevMonth").onclick = () => { curr.setMonth(curr.getMonth()-1); renderCal(); };
   document.getElementById("nextMonth").onclick = () => { curr.setMonth(curr.getMonth()+1); renderCal(); };
   document.getElementById("confirmBooking").onclick = () => {
-    if(!selD || !selT) return; const dStr = selD.toLocaleDateString("es-ES");
+    const nameInput = document.getElementById("clientName");
+    const name = nameInput.value.trim();
+    
+    // Validación de formulario
+    if (!name) {
+      nameInput.classList.add("error");
+      if (!nameInput.nextElementSibling || !nameInput.nextElementSibling.classList.contains("error-message")) {
+        const err = document.createElement("span");
+        err.className = "error-message";
+        err.textContent = "Por favor, ingresá tu nombre.";
+        nameInput.parentNode.appendChild(err);
+      }
+      return;
+    }
+    nameInput.classList.remove("error");
+    if (nameInput.nextElementSibling && nameInput.nextElementSibling.classList.contains("error-message")) {
+      nameInput.nextElementSibling.remove();
+    }
+
+    if(!selD || !selT || !selStudio) return; 
+    const dStr = selD.toLocaleDateString("es-ES");
     const b = JSON.parse(localStorage.getItem("bookedSlots") || "{}"); if(!b[dStr]) b[dStr] = [];
-    if(!b[dStr].includes(selT)) { b[dStr].push(selT); localStorage.setItem("bookedSlots", JSON.stringify(b)); if(isCloudEnabled()) cloudUpsert("bookings", {id:`${dStr}-${selT}`, date:dStr, time:selT}); }
+    
+    const alreadyBooked = b[dStr].some(booking => {
+      if (typeof booking === 'string') return booking === selT && selStudio === "Monserrat";
+      return booking.time === selT && booking.studio === selStudio;
+    });
+
+    if(!alreadyBooked) { 
+      b[dStr].push({time: selT, studio: selStudio, name: name}); 
+      localStorage.setItem("bookedSlots", JSON.stringify(b)); 
+      if(isCloudEnabled()) cloudUpsert("bookings", {id:`${dStr}-${selT}-${selStudio}`, date:dStr, time:selT, studio:selStudio, name: name}); 
+    }
     window.open(MERCADO_PAGO_LINK, "_blank");
-    setTimeout(() => { window.location.href = `https://wa.me/${WHATSAPP_NUMBER}?text=${encodeURIComponent("Confirmar turno "+dStr+" "+selT)}`; }, 1000);
+    setTimeout(() => { window.location.href = `https://wa.me/${WHATSAPP_NUMBER}?text=${encodeURIComponent("Confirmar turno en "+selStudio+": "+dStr+" "+selT+" a nombre de "+name)}`; }, 1000);
   };
   renderCal();
 }
@@ -323,6 +424,10 @@ const saveAllChanges = () => {
 };
 
 const applySavedChanges = () => {
+  // Actualizar número de WhatsApp en la UI si existe el elemento
+  const displayNum = document.getElementById("display-number");
+  if (displayNum) displayNum.textContent = `+${WHATSAPP_NUMBER}`;
+
   const s = localStorage.getItem(`miri_changes_${currentPage || 'global'}`); if(!s) return;
   const d = JSON.parse(s); 
   if (d.texts) Object.keys(d.texts).forEach(p => { const el = document.querySelector(p); if(el) el.innerHTML = d.texts[p]; });
@@ -335,25 +440,34 @@ const applySavedChanges = () => {
   });
 };
 
-const syncWithCloud = () => {
+const syncWithCloud = (manual = false) => {
   if(isCloudEnabled()) {
-    cloudFetch("bookings").then(d => { if(d) { const c = {}; d.forEach(b => { if(!c[b.date]) c[b.date]=[]; c[b.date].push(b.time); }); localStorage.setItem("bookedSlots", JSON.stringify(c)); if(currentPage==="reservar") renderCal(); } });
+    cloudFetch("bookings").then(d => { if(d) { const c = {}; d.forEach(b => { if(!c[b.date]) c[b.date]=[]; c[b.date].push({time: b.time, studio: b.studio || "Monserrat", name: b.name || "-"}); }); localStorage.setItem("bookedSlots", JSON.stringify(c)); if(currentPage==="reservar") renderCal(); } });
     cloudFetch("config").then(d => { if(d && d[0]) { localStorage.setItem("miri_wa_number", d[0].wa); localStorage.setItem("miri_mp_link", d[0].mp); } });
     cloudFetch("page_changes").then(d => { if(d) d.forEach(i => localStorage.setItem(`miri_changes_${i.id}`, JSON.stringify(i.data))); applySavedChanges(); });
+    if(manual) alert("Sincronización completada");
+  } else if(manual) {
+    alert("La nube no está configurada.");
   }
 };
 
 const renderAdminBookings = () => {
   const t = document.getElementById("adminBookingsTable"); if(!t) return;
   const b = JSON.parse(localStorage.getItem("bookedSlots") || "{}"); t.innerHTML = "";
-  Object.keys(b).forEach(d => b[d].forEach(time => { const r = t.insertRow(); r.innerHTML = `<td>${d}</td><td>${time}</td><td><button onclick="releaseSlot('${d}','${time}')">Liberar</button></td>`; }));
+  Object.keys(b).forEach(d => b[d].forEach(booking => { 
+    const r = t.insertRow(); 
+    const studioClass = booking.studio === "Monserrat" ? "monserrat" : "jose-marmol";
+    const clientName = booking.name || "-";
+    r.innerHTML = `<td>${d}</td><td>${booking.time}</td><td><span class="studio-tag ${studioClass}">${booking.studio}</span></td><td>${clientName}</td><td><button onclick="releaseSlot('${d}','${booking.time}','${booking.studio}')">Liberar</button></td>`; 
+  }));
 };
 
-window.releaseSlot = (d, t) => {
+window.releaseSlot = (d, t, s) => {
   const b = JSON.parse(localStorage.getItem("bookedSlots") || "{}");
   if(b[d]) {
-    b[d] = b[d].filter(time => time !== t); localStorage.setItem("bookedSlots", JSON.stringify(b));
-    if(isCloudEnabled()) cloudDelete("bookings", `${d}-${t}`);
+    b[d] = b[d].filter(booking => !(booking.time === t && booking.studio === s)); 
+    localStorage.setItem("bookedSlots", JSON.stringify(b));
+    if(isCloudEnabled()) cloudDelete("bookings", `${d}-${t}-${s}`);
     renderAdminBookings();
   }
 };

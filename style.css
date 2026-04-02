@@ -338,6 +338,53 @@ button {
 .collage-item-6 { grid-column: span 1; grid-row: span 1; background-image: url("https://images.unsplash.com/photo-1526047932273-341f2a7631f9?auto=format&fit=crop&w=800&q=80"); }
 
 /* Diseño móvil del collage */
+/* Booking Form Styles */
+.booking-form {
+  margin-bottom: 2rem;
+  text-align: left;
+}
+
+.form-group {
+  display: flex;
+  flex-direction: column;
+  gap: 0.6rem;
+}
+
+.form-group label {
+  font-size: 0.9rem;
+  font-weight: 700;
+  color: var(--muted);
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
+}
+
+.form-group input {
+  padding: 1.2rem 1.5rem;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--border);
+  background: white;
+  font-size: 1rem;
+  transition: all 0.25s ease;
+  width: 100%;
+}
+
+.form-group input:focus {
+  outline: none;
+  border-color: var(--primary);
+  box-shadow: 0 0 0 4px rgba(217, 138, 167, 0.1);
+}
+
+.form-group input.error {
+  border-color: #e53e3e;
+}
+
+.error-message {
+  color: #e53e3e;
+  font-size: 0.8rem;
+  font-weight: 600;
+  margin-top: 0.3rem;
+}
+
 @media (max-width: 860px) {
   .hero-collage {
     grid-template-columns: 1fr 1fr;
@@ -1000,7 +1047,143 @@ button {
 .slot-button.selected {
   background: var(--primary-strong);
   color: white;
+}
+
+.slot-button.booked {
+  background: #eee;
+  color: #ccc;
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+.booking-summary h3, .slots-wrapper h3 {
+  font-family: "Cormorant Garamond", serif;
+  font-size: 1.8rem;
+  margin-top: 0;
+  margin-bottom: 1.5rem;
+}
+
+.summary-note {
+  font-size: 0.9rem;
+  color: var(--muted);
+  font-style: italic;
+  margin-bottom: 1.5rem;
+}
+
+/* Studio Selector Styles */
+.studio-selector {
+  grid-column: span 2;
+  margin-bottom: 2.5rem;
+  text-align: center;
+  background: rgba(255, 255, 255, 0.84);
+  border: 1px solid var(--border);
+  border-radius: var(--radius-xl);
+  padding: 2.5rem;
+  box-shadow: var(--shadow);
+}
+
+.studio-selector h3 {
+  font-family: "Cormorant Garamond", serif;
+  font-size: 2.4rem;
+  margin-top: 0;
+  margin-bottom: 1.5rem;
+}
+
+.studio-options {
+  display: flex;
+  justify-content: center;
+  gap: 1.5rem;
+  flex-wrap: wrap;
+}
+
+.studio-button {
+  display: flex;
+  align-items: center;
+  gap: 1rem;
+  padding: 1.2rem 2rem;
+  border-radius: var(--radius-lg);
+  background: white;
+  border: 2px solid var(--border);
+  font-size: 1.1rem;
+  font-weight: 700;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+  box-shadow: var(--shadow-soft);
+}
+
+.studio-button:hover {
+  transform: translateY(-4px);
+  border-color: var(--primary);
+  box-shadow: var(--shadow);
+}
+
+.studio-button.selected {
   border-color: var(--primary-strong);
+  background: var(--primary-soft);
+  color: var(--primary-strong);
+  transform: translateY(-2px);
+}
+
+.studio-dot {
+  width: 14px;
+  height: 14px;
+  border-radius: 50%;
+  flex-shrink: 0;
+}
+
+.studio-dot.monserrat {
+  background-color: #d98aa7; /* Monserrat Color */
+  box-shadow: 0 0 10px rgba(217, 138, 167, 0.4);
+}
+
+.studio-dot.jose-marmol {
+  background-color: #8a2be2; /* José Marmol Color */
+  box-shadow: 0 0 10px rgba(138, 43, 226, 0.4);
+}
+
+/* Admin Table Color Coding */
+.admin-table .studio-tag {
+  display: inline-block;
+  padding: 4px 10px;
+  border-radius: 12px;
+  font-size: 0.75rem;
+  font-weight: 800;
+  color: white;
+  text-transform: uppercase;
+}
+
+.studio-tag.monserrat {
+  background-color: #d98aa7;
+}
+
+.studio-tag.jose-marmol {
+  background-color: #8a2be2;
+}
+
+/* Calendar Visual Indicators */
+.calendar-day .day-indicator {
+  display: flex;
+  gap: 2px;
+  justify-content: center;
+  margin-top: 4px;
+  height: 4px;
+}
+
+.dot-indicator {
+  width: 4px;
+  height: 4px;
+  border-radius: 50%;
+}
+
+.dot-indicator.monserrat { background: #d98aa7; }
+.dot-indicator.jose-marmol { background: #8a2be2; }
+
+@media (max-width: 860px) {
+  .booking-container {
+    grid-template-columns: 1fr;
+  }
+  .studio-selector {
+    grid-column: span 1;
+  }
 }
 
 .slot-button.booked {

@@ -51,7 +51,20 @@
       <section class="section">
         <div class="container">
           <div class="booking-container reveal">
-            <div class="calendar-wrapper">
+            <div class="studio-selector">
+              <h3>Seleccioná el estudio</h3>
+              <div class="studio-options">
+                <button class="studio-button" data-studio="Monserrat">
+                  <span class="studio-dot monserrat"></span> Monserrat
+                </button>
+                <button class="studio-button" data-studio="José Marmol">
+                  <span class="studio-dot jose-marmol"></span> José Marmol
+                </button>
+              </div>
+            </div>
+
+            <div id="bookingCalendar" style="display: none;">
+              <div class="calendar-wrapper">
               <div class="calendar-header">
                 <button id="prevMonth">&lt;</button>
                 <h2 id="currentMonth">Mes Año</h2>
@@ -71,6 +84,12 @@
 
             <div class="booking-summary" id="bookingSummary" style="display: none;">
               <h3>Resumen de tu reserva</h3>
+              <div class="booking-form">
+                <div class="form-group">
+                  <label for="clientName">Tu Nombre</label>
+                  <input type="text" id="clientName" placeholder="Escribí tu nombre completo" required>
+                </div>
+              </div>
               <p>Día: <strong id="summaryDate"></strong></p>
               <p>Horario: <strong id="summaryTime"></strong></p>
               <p class="summary-note">Para confirmar el turno, es necesario realizar el pago de la seña a través de Mercado Pago.</p>
