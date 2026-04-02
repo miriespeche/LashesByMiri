@@ -46,11 +46,24 @@ const cloudUpsert = async (table, data) => {
   try {
     const response = await fetch(`${SUPABASE_URL}/rest/v1/${table}`, {
       method: "POST",
-      headers: { "apikey": SUPABASE_KEY, "Authorization": `Bearer ${SUPABASE_KEY}`, "Content-Type": "application/json", "Prefer": "resolution=merge-duplicates" },
+      headers: { 
+        "apikey": SUPABASE_KEY, 
+        "Authorization": `Bearer ${SUPABASE_KEY}`, 
+        "Content-Type": "application/json", 
+        "Prefer": "resolution=merge-duplicates" 
+      },
       body: JSON.stringify(data)
     });
-    return response.ok;
-  } catch (e) { return false; }
+    if (!response.ok) {
+      const err = await response.json();
+      console.error("Error en cloudUpsert:", err);
+      return false;
+    }
+    return true;
+  } catch (e) { 
+    console.error("Error de conexión en cloudUpsert:", e);
+    return false; 
+  }
 };
 
 const cloudDelete = async (table, id) => {
@@ -625,13 +638,18 @@ const saveAllChanges = async () => {
   document.querySelectorAll('.editable-img').forEach(el => {
     const path = getElementPath(el);
     let src = "";
-    if (el.tagName === 'IMG') src = el.src;
-    else {
-      const bg = getComputedStyle(el).backgroundImage;
-      const match = bg.match(/url\(["']?(.*?)["']?\)/);
-      src = match ? match[1] : "";
+    if (el.tagName === 'IMG') {
+      src = el.src;
+    } else {
+      // Intentar obtener la imagen desde style.backgroundImage (que es donde el editor la pone)
+      const bgStyle = el.style.backgroundImage;
+      const match = bgStyle.match(/url\(["']?(.*?)["']?\)/);
+      if (match) {
+        src = match[1];
+      }
     }
-    if (src) { 
+    // Solo guardamos si es una imagen nueva (Base64)
+    if (src && src.startsWith('data:image')) { 
       changes.images[path] = src;
     }
   });
