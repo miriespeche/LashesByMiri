@@ -1,6 +1,7 @@
 let WHATSAPP_NUMBER = localStorage.getItem("miri_wa_number") || "5491144123280";
 const DEFAULT_MESSAGE = "Hola, quiero reservar un turno para extensiones de pestañas";
 let MERCADO_PAGO_LINK = localStorage.getItem("miri_mp_link") || "https://mpago.la/1iJbsQy";
+let WORK_SLOTS = JSON.parse(localStorage.getItem("miri_work_slots") || '["09:00", "10:00", "11:00", "12:00", "14:00", "15:00", "16:00", "17:00", "18:00"]');
 
 // --- Configuración de Base de Datos (Supabase) ---
 const CLOUD_URL = "https://hugbaugzsntojbotjblz.supabase.co"; 
@@ -88,7 +89,7 @@ const injectAdminUI = () => {
           <h3>Configuración Manual</h3>
           <div style="display:flex; gap:10px; flex-wrap:wrap;">
             <button class="button button-secondary" id="adminDownloadChanges" style="background:#d98aa7; color:white;">1. Descargar JSON</button>
-            <button class="button button-secondary" id="adminSyncFromCloud" style="color:#d98aa7;">Cargar desde GitHub</button>
+            <button class="button button-secondary" id="adminSyncFromCloud" style="color:#d98aa7;">Sincronizar Nube</button>
             <button class="button" id="adminResetLocal" style="background:#e53e3e; color:white;">Borrar TODO</button>
           </div>
         </div>
@@ -103,6 +104,16 @@ const injectAdminUI = () => {
             <div class="admin-field"><label>Link Pago</label><input type="text" id="adminMpLink"></div>
           </div>
           <button class="button button-primary btn-save-all" id="adminSaveConfig">Guardar</button>
+        </div>
+        <div class="admin-section" id="adminSectionSlots">
+          <h3>Horarios de Trabajo</h3>
+          <p style="font-size:0.85rem; color:#666; margin-bottom:10px;">Escribe los horarios separados por coma (ej: 09:00, 10:30, 14:00).</p>
+          <div class="admin-grid">
+            <div class="admin-field" style="grid-column: span 2;">
+              <input type="text" id="adminWorkSlots" placeholder="09:00, 10:00, 11:00...">
+            </div>
+          </div>
+          <button class="button button-primary" id="adminSaveSlots" style="margin-top:10px; background:#d98aa7;">Actualizar Horarios</button>
         </div>
         <div class="admin-section">
           <h3>Turnos</h3>
@@ -127,8 +138,20 @@ const injectAdminUI = () => {
     const mp = document.getElementById("adminMpLink").value.trim();
     if(wa) localStorage.setItem("miri_wa_number", wa);
     if(mp) localStorage.setItem("miri_mp_link", mp);
-    if(isCloudEnabled()) cloudUpsert("config", {id:1, wa:wa||WHATSAPP_NUMBER, mp:mp||MERCADO_PAGO_LINK}).then(() => location.reload());
+    if(isCloudEnabled()) cloudUpsert("config", {id:1, wa:wa||WHATSAPP_NUMBER, mp:mp||MERCADO_PAGO_LINK, slots: WORK_SLOTS}).then(() => location.reload());
     else location.reload();
+  };
+  document.getElementById("adminSaveSlots").onclick = () => {
+    const slotsRaw = document.getElementById("adminWorkSlots").value.trim();
+    if(slotsRaw) {
+      const slotsArr = slotsRaw.split(",").map(s => s.trim()).filter(s => s !== "");
+      if(slotsArr.length > 0) {
+        localStorage.setItem("miri_work_slots", JSON.stringify(slotsArr));
+        WORK_SLOTS = slotsArr;
+        if(isCloudEnabled()) cloudUpsert("config", {id:1, wa:WHATSAPP_NUMBER, mp:MERCADO_PAGO_LINK, slots: WORK_SLOTS}).then(() => location.reload());
+        else location.reload();
+      }
+    }
   };
   document.getElementById("adminDownloadChanges").onclick = () => {
     const data = { config: { wa: WHATSAPP_NUMBER, mp: MERCADO_PAGO_LINK }, bookings: JSON.parse(localStorage.getItem("bookedSlots") || "{}"), changes: {} };
@@ -138,10 +161,17 @@ const injectAdminUI = () => {
 };
 
 const openAdminPanel = () => {
+  // Forzar reinyección si falta el campo de horarios (por actualizaciones de código)
+  if(adminOverlay && !document.getElementById("adminWorkSlots")) {
+    adminOverlay.remove();
+    adminOverlay = null;
+  }
   if(!adminOverlay) injectAdminUI();
   adminOverlay.style.display = "flex";
   document.getElementById("adminWaNumber").value = WHATSAPP_NUMBER;
   document.getElementById("adminMpLink").value = MERCADO_PAGO_LINK;
+  document.getElementById("adminWorkSlots").value = WORK_SLOTS.join(", ");
+  
   if(isCloudEnabled()) {
     document.getElementById("adminSupabaseUrl").value = SUPABASE_URL;
     document.getElementById("adminSupabaseKey").value = SUPABASE_KEY;
@@ -206,7 +236,8 @@ if(currentPage === "reservar") {
   const monthEl = document.getElementById("currentMonth");
   const slotsGrid = document.getElementById("slotsGrid");
   let curr = new Date(); let selD = null; let selT = null; let selStudio = null;
-  const slots = ["09:00", "10:00", "11:00", "12:00", "14:00", "15:00", "16:00", "17:00", "18:00"];
+  // Usar WORK_SLOTS dinámicos
+  // const slots = ["09:00", "10:00", "11:00", "12:00", "14:00", "15:00", "16:00", "17:00", "18:00"];
 
   // Manejo de Selección de Estudio
   document.querySelectorAll(".studio-button").forEach(btn => {
@@ -269,7 +300,7 @@ if(currentPage === "reservar") {
     slotsGrid.innerHTML = ""; 
     const allBooked = JSON.parse(localStorage.getItem("bookedSlots") || "{}")[dStr] || [];
     
-    slots.forEach(t => {
+    WORK_SLOTS.forEach(t => {
       const b = document.createElement("button"); b.className="slot-button"; b.textContent=t;
       
       // Verificar si el slot está ocupado para el estudio seleccionado
@@ -419,8 +450,16 @@ const saveAllChanges = () => {
     }
   });
 
+  console.log("Guardando cambios para:", pId, changes);
   localStorage.setItem(`miri_changes_${pId}`, JSON.stringify(changes));
-  if(isCloudEnabled()) cloudUpsert("page_changes", {id:pId, data:changes});
+  if(isCloudEnabled()) {
+    cloudUpsert("page_changes", {id:pId, data:changes}).then(res => {
+      if(res) alert("¡Cambios guardados con éxito en la nube!");
+      else alert("Error al guardar en la nube, se guardó localmente.");
+    });
+  } else {
+    alert("Guardado localmente (Nube no configurada).");
+  }
 };
 
 const applySavedChanges = () => {
@@ -443,7 +482,16 @@ const applySavedChanges = () => {
 const syncWithCloud = (manual = false) => {
   if(isCloudEnabled()) {
     cloudFetch("bookings").then(d => { if(d) { const c = {}; d.forEach(b => { if(!c[b.date]) c[b.date]=[]; c[b.date].push({time: b.time, studio: b.studio || "Monserrat", name: b.name || "-"}); }); localStorage.setItem("bookedSlots", JSON.stringify(c)); if(currentPage==="reservar") renderCal(); } });
-    cloudFetch("config").then(d => { if(d && d[0]) { localStorage.setItem("miri_wa_number", d[0].wa); localStorage.setItem("miri_mp_link", d[0].mp); } });
+    cloudFetch("config").then(d => { 
+      if(d && d[0]) { 
+        localStorage.setItem("miri_wa_number", d[0].wa); 
+        localStorage.setItem("miri_mp_link", d[0].mp); 
+        if(d[0].slots) {
+          localStorage.setItem("miri_work_slots", JSON.stringify(d[0].slots));
+          WORK_SLOTS = d[0].slots;
+        }
+      } 
+    });
     cloudFetch("page_changes").then(d => { if(d) d.forEach(i => localStorage.setItem(`miri_changes_${i.id}`, JSON.stringify(i.data))); applySavedChanges(); });
     if(manual) alert("Sincronización completada");
   } else if(manual) {
