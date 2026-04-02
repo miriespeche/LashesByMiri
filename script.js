@@ -69,7 +69,7 @@ const cloudUpsert = async (table, data) => {
 const cloudDelete = async (table, id) => {
   if (!isCloudEnabled()) return false;
   try {
-    const response = await fetch(`${SUPABASE_URL}/rest/v1/${table}?id=eq.${id}`, {
+    const response = await fetch(`${SUPABASE_URL}/rest/v1/${table}?id=eq.${encodeURIComponent(id)}`, {
       method: "DELETE",
       headers: { "apikey": SUPABASE_KEY, "Authorization": `Bearer ${SUPABASE_KEY}` }
     });
@@ -454,7 +454,7 @@ if(currentPage === "reservar") {
       if(bookingsForDay.length > 0) {
         const indicator = document.createElement("div");
         indicator.className = "day-indicator";
-        const hasMonserrat = bookingsForDay.some(b => (typeof b === 'string' ? true : b.studio === "Monserrat"));
+        const hasMonserrat = bookingsForDay.some(b => (typeof b === 'string' || b.studio === "Monserrat"));
         const hasJose = bookingsForDay.some(b => (typeof b === 'object' && b.studio === "José Marmol"));
         if(hasMonserrat) indicator.innerHTML += '<span class="dot-indicator monserrat"></span>';
         if(hasJose) indicator.innerHTML += '<span class="dot-indicator jose-marmol"></span>';
@@ -768,6 +768,25 @@ window.releaseSlot = (d, t, s) => {
 };
 
 document.addEventListener('DOMContentLoaded', () => { 
+  // --- Lógica del Menú Mobile ---
+  const menuToggle = document.querySelector('.menu-toggle');
+  const nav = document.querySelector('.header'); // Usamos el header para el estado nav-active
+  
+  if (menuToggle) {
+    menuToggle.addEventListener('click', () => {
+      const isOpen = document.body.classList.toggle('nav-active');
+      menuToggle.setAttribute('aria-expanded', isOpen);
+    });
+  }
+
+  // Cerrar menú al hacer clic en un link (opcional pero recomendado)
+  document.querySelectorAll('.nav a').forEach(link => {
+    link.addEventListener('click', () => {
+      document.body.classList.remove('nav-active');
+      if (menuToggle) menuToggle.setAttribute('aria-expanded', 'false');
+    });
+  });
+
   // Asegurar que nada sea editable al cargar la página
   document.querySelectorAll('[contenteditable]').forEach(el => el.contentEditable = "false");
   
