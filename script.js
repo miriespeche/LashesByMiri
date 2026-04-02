@@ -571,7 +571,10 @@ const enableVisualEditing = () => {
   
   // Textos editables
   document.querySelectorAll('p, h1, h2, h3, span, strong, small, figcaption, .eyebrow, .button').forEach(el => { 
-    if(!el.closest('.admin-overlay') && !el.closest('.nav')) el.contentEditable="true"; 
+    if(!el.closest('.admin-overlay') && !el.closest('.nav')) {
+      el.contentEditable = "true";
+      el.setAttribute('spellcheck', 'false'); // Desactivar subrayado rojo de ortografía
+    }
   });
 
   // Imágenes editables
@@ -631,7 +634,9 @@ const saveAllChanges = async () => {
   
   // Guardar textos
   document.querySelectorAll('[contenteditable="true"]').forEach(el => { 
-    changes.texts[getElementPath(el)] = el.innerHTML.trim(); 
+    // Limpiar el HTML antes de guardar para evitar que se guarden atributos de edición
+    let htmlToSave = el.innerHTML.trim().replace(/contenteditable="true"/g, '').replace(/contenteditable="false"/g, '');
+    changes.texts[getElementPath(el)] = htmlToSave; 
   });
 
   // Guardar imágenes
@@ -670,12 +675,18 @@ const applySavedChanges = () => {
   const displayNum = document.getElementById("display-number");
   if (displayNum) displayNum.textContent = `+${WHATSAPP_NUMBER}`;
 
+  const isEditing = document.body.classList.contains('editing-mode');
   const s = localStorage.getItem(`miri_changes_${currentPage || 'global'}`); if(!s) return;
   const d = JSON.parse(s); 
+  
   if (d.texts) Object.keys(d.texts).forEach(p => { 
     const el = document.querySelector(p); 
     if (el && d.texts[p] !== undefined && d.texts[p] !== null) {
-      el.innerHTML = d.texts[p]; 
+      // Limpiar el HTML de posibles atributos contenteditable que se hayan filtrado
+      let cleanHtml = d.texts[p].replace(/contenteditable="true"/g, '').replace(/contenteditable="false"/g, '');
+      el.innerHTML = cleanHtml; 
+      // Asegurar que no sea editable si no estamos en modo edición
+      if (!isEditing) el.contentEditable = "false";
     }
   });
   if (d.images) Object.keys(d.images).forEach(p => { 
@@ -757,6 +768,9 @@ window.releaseSlot = (d, t, s) => {
 };
 
 document.addEventListener('DOMContentLoaded', () => { 
+  // Asegurar que nada sea editable al cargar la página
+  document.querySelectorAll('[contenteditable]').forEach(el => el.contentEditable = "false");
+  
   applySavedChanges(); 
   syncWithCloud(); 
   if(currentPage === "reservar" && isCloudEnabled()) {
