@@ -272,26 +272,26 @@ button {
   display: none;
   width: 44px;
   height: 44px;
-  border-radius: 10px;
+  border-radius: 12px;
   align-items: center;
   justify-content: center;
   flex-direction: column;
-  gap: 5px;
-  background: white;
+  gap: 4px;
+  background: #ffffff;
   border: 1px solid var(--border);
-  box-shadow: 0 4px 15px rgba(0,0,0,0.1);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.1);
   cursor: pointer;
-  z-index: 1000;
+  z-index: 1001;
   position: relative;
 }
 
 .menu-toggle span {
   display: block;
   width: 22px;
-  height: 2px;
-  background: var(--primary-strong);
-  border-radius: 2px;
-  transition: all 0.3s ease;
+  height: 2.5px;
+  background-color: var(--primary-strong);
+  border-radius: 4px;
+  transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 /* Efecto cuando está abierto */
@@ -1587,6 +1587,19 @@ body:not(.editing-mode) h3 {
   }
   .menu-toggle {
     display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    flex-direction: column;
+    gap: 4px;
+    background: white !important;
+  }
+
+  .menu-toggle span {
+    display: block;
+    width: 22px;
+    height: 2px;
+    background-color: #49343f !important;
+    opacity: 1 !important;
   }
 
   .nav {
@@ -1675,6 +1688,17 @@ body:not(.editing-mode) h3 {
 
   .menu-toggle {
     display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-direction: column;
+    gap: 4px;
+  }
+
+  .menu-toggle span {
+    background-color: #49343f !important;
+    width: 20px;
+    height: 2px;
+    opacity: 1 !important;
   }
 
   .hero-copy h1 {
