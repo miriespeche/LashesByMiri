@@ -240,28 +240,99 @@ const enableVisualEditing = () => {
   const bar = document.createElement('div'); bar.className='admin-alert';
   bar.innerHTML = `<span>MODO EDICIÓN</span><button id="adminSaveVisual">Guardar</button><button onclick="location.reload()">Salir</button>`;
   document.body.appendChild(bar);
-  document.querySelectorAll('p, h1, h2, h3, span, strong, small, figcaption, .eyebrow, .button').forEach(el => { if(!el.closest('.admin-overlay') && !el.closest('.nav')) el.contentEditable="true"; });
+  
+  // Textos editables
+  document.querySelectorAll('p, h1, h2, h3, span, strong, small, figcaption, .eyebrow, .button').forEach(el => { 
+    if(!el.closest('.admin-overlay') && !el.closest('.nav')) el.contentEditable="true"; 
+  });
+
+  // Imágenes editables
+  document.querySelectorAll('img, .collage-item, .gallery-item, .hero, .page-hero').forEach(el => {
+    if (el.closest('.admin-overlay')) return;
+    el.classList.add('editable-img');
+    el.onclick = (e) => {
+      if (e.target !== el && e.target.contentEditable === "true") return;
+      e.preventDefault();
+      
+      const input = document.createElement('input');
+      input.type = 'file';
+      input.accept = 'image/*';
+      
+      input.onchange = (ev) => {
+        const file = ev.target.files[0];
+        if (!file) return;
+
+        // Comprimir imagen para que no pese tanto en la base de datos
+        const reader = new FileReader();
+        reader.onload = (event) => {
+          const img = new Image();
+          img.onload = () => {
+            const canvas = document.createElement('canvas');
+            let width = img.width;
+            let height = img.height;
+            const MAX_SIZE = 800; // Tamaño máximo para optimizar
+            if (width > height) {
+              if (width > MAX_SIZE) { height *= MAX_SIZE / width; width = MAX_SIZE; }
+            } else {
+              if (height > MAX_SIZE) { width *= MAX_SIZE / height; height = MAX_SIZE; }
+            }
+            canvas.width = width; canvas.height = height;
+            canvas.getContext('2d').drawImage(img, 0, 0, width, height);
+            
+            // Convertir a texto (Base64) para guardar en Supabase
+            const base64 = canvas.toDataURL('image/jpeg', 0.6);
+            if (el.tagName === 'IMG') el.src = base64;
+            else el.style.backgroundImage = `url("${base64}")`;
+          };
+          img.src = event.target.result;
+        };
+        reader.readAsDataURL(file);
+      };
+      input.click();
+    };
+  });
+
   document.getElementById('adminSaveVisual').onclick = () => { saveAllChanges(); location.reload(); };
 };
 
 const saveAllChanges = () => {
   const pId = currentPage || 'global'; const changes = { texts: {}, images: {} };
-  document.querySelectorAll('[contenteditable="true"]').forEach(el => { changes.texts[getElementPath(el)] = el.innerHTML.trim(); });
+  
+  // Guardar textos
+  document.querySelectorAll('[contenteditable="true"]').forEach(el => { 
+    changes.texts[getElementPath(el)] = el.innerHTML.trim(); 
+  });
+
+  // Guardar imágenes
+  document.querySelectorAll('.editable-img').forEach(el => {
+    const path = getElementPath(el);
+    let src = "";
+    if (el.tagName === 'IMG') src = el.src;
+    else {
+      const bg = getComputedStyle(el).backgroundImage;
+      const match = bg.match(/url\(["']?(.*?)["']?\)/);
+      src = match ? match[1] : "";
+    }
+    if (src) { 
+      changes.images[path] = src;
+    }
+  });
+
   localStorage.setItem(`miri_changes_${pId}`, JSON.stringify(changes));
   if(isCloudEnabled()) cloudUpsert("page_changes", {id:pId, data:changes});
 };
 
-const getElementPath = (el) => {
-  const path = []; while(el && el.nodeType===Node.ELEMENT_NODE) {
-    let s = el.nodeName.toLowerCase(); if(el.id) { s += '#'+el.id; path.unshift(s); break; }
-    let sib = el, n = 1; while(sib = sib.previousElementSibling) if(sib.nodeName.toLowerCase()==s) n++;
-    if(n!=1) s += `:nth-of-type(${n})`; path.unshift(s); el = el.parentNode;
-  } return path.join(" > ");
-};
-
 const applySavedChanges = () => {
   const s = localStorage.getItem(`miri_changes_${currentPage || 'global'}`); if(!s) return;
-  const d = JSON.parse(s); if(d.texts) Object.keys(d.texts).forEach(p => { const el = document.querySelector(p); if(el) el.innerHTML = d.texts[p]; });
+  const d = JSON.parse(s); 
+  if (d.texts) Object.keys(d.texts).forEach(p => { const el = document.querySelector(p); if(el) el.innerHTML = d.texts[p]; });
+  if (d.images) Object.keys(d.images).forEach(p => { 
+    const el = document.querySelector(p); 
+    if (el) {
+      if (el.tagName === 'IMG') el.src = d.images[p];
+      else el.style.backgroundImage = `url("${d.images[p]}")`;
+    }
+  });
 };
 
 const syncWithCloud = () => {
