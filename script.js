@@ -683,7 +683,10 @@ const applySavedChanges = () => {
   
   if (d.texts) Object.keys(d.texts).forEach(p => { 
     const el = document.querySelector(p); 
-    if (el && !el.classList.contains('menu-toggle') && !el.classList.contains('button') && d.texts[p] !== undefined && d.texts[p] !== null) {
+    // Permitir editar textos de servicios (h3 y price) incluso si son botones
+    const isServiceText = el && (el.classList.contains('service-price') || (el.parentElement && el.parentElement.classList.contains('service-card') && el.tagName === 'H3'));
+    
+    if (el && !el.classList.contains('menu-toggle') && (!el.classList.contains('button') || isServiceText) && d.texts[p] !== undefined && d.texts[p] !== null) {
       // Limpiar el HTML de posibles atributos contenteditable que se hayan filtrado
       let cleanHtml = d.texts[p].replace(/contenteditable="true"/g, '').replace(/contenteditable="false"/g, '');
       el.innerHTML = cleanHtml; 
