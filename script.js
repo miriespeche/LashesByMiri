@@ -571,7 +571,7 @@ const enableVisualEditing = () => {
   
   // Textos editables
   document.querySelectorAll('p, h1, h2, h3, span, strong, small, figcaption, .eyebrow, .button').forEach(el => { 
-    if(!el.closest('.admin-overlay') && !el.closest('.nav')) {
+    if(!el.closest('.admin-overlay') && !el.closest('.nav') && !el.classList.contains('menu-toggle')) {
       el.contentEditable = "true";
       el.setAttribute('spellcheck', 'false'); // Desactivar subrayado rojo de ortografía
     }
@@ -681,7 +681,7 @@ const applySavedChanges = () => {
   
   if (d.texts) Object.keys(d.texts).forEach(p => { 
     const el = document.querySelector(p); 
-    if (el && d.texts[p] !== undefined && d.texts[p] !== null) {
+    if (el && !el.classList.contains('menu-toggle') && d.texts[p] !== undefined && d.texts[p] !== null) {
       // Limpiar el HTML de posibles atributos contenteditable que se hayan filtrado
       let cleanHtml = d.texts[p].replace(/contenteditable="true"/g, '').replace(/contenteditable="false"/g, '');
       el.innerHTML = cleanHtml; 
