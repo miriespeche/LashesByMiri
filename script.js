@@ -557,7 +557,9 @@ if(currentPage === "reservar") {
       if(isCloudEnabled()) cloudUpsert("bookings", {id:`${dStr}-${selT}-${selStudio}`, date:dStr, time:selT, studio:selStudio, name: name}); 
     }
     window.open(MERCADO_PAGO_LINK, "_blank");
-    setTimeout(() => { window.location.href = `https://wa.me/${WHATSAPP_NUMBER}?text=${encodeURIComponent("Confirmar turno en "+selStudio+": "+dStr+" "+selT+" a nombre de "+name)}`; }, 1000);
+    const urlParams = new URLSearchParams(window.location.search);
+    const selectedService = urlParams.get('servicio') || "extensiones de pestañas";
+    setTimeout(() => { window.location.href = `https://wa.me/${WHATSAPP_NUMBER}?text=${encodeURIComponent("Confirmar turno para " + selectedService + " en "+selStudio+": "+dStr+" "+selT+" a nombre de "+name)}`; }, 1000);
   };
   renderCal();
 }
@@ -570,7 +572,7 @@ const enableVisualEditing = () => {
   document.body.appendChild(bar);
   
   // Textos editables
-  document.querySelectorAll('p, h1, h2, h3, span, strong, small, figcaption, .eyebrow, .button').forEach(el => { 
+  document.querySelectorAll('p, h1, h2, h3, span, strong, small, figcaption, .eyebrow, .button:not([href])').forEach(el => { 
     if(!el.closest('.admin-overlay') && !el.closest('.nav') && !el.classList.contains('menu-toggle')) {
       el.contentEditable = "true";
       el.setAttribute('spellcheck', 'false'); // Desactivar subrayado rojo de ortografía
@@ -579,7 +581,7 @@ const enableVisualEditing = () => {
 
   // Imágenes editables
   document.querySelectorAll('img, .collage-item, .gallery-item, .hero, .page-hero').forEach(el => {
-    if (el.closest('.admin-overlay')) return;
+    if (el.closest('.admin-overlay') || el.closest('.nav')) return;
     el.classList.add('editable-img');
     el.onclick = (e) => {
       if (e.target !== el && e.target.contentEditable === "true") return;
@@ -681,7 +683,7 @@ const applySavedChanges = () => {
   
   if (d.texts) Object.keys(d.texts).forEach(p => { 
     const el = document.querySelector(p); 
-    if (el && !el.classList.contains('menu-toggle') && d.texts[p] !== undefined && d.texts[p] !== null) {
+    if (el && !el.classList.contains('menu-toggle') && !el.classList.contains('button') && d.texts[p] !== undefined && d.texts[p] !== null) {
       // Limpiar el HTML de posibles atributos contenteditable que se hayan filtrado
       let cleanHtml = d.texts[p].replace(/contenteditable="true"/g, '').replace(/contenteditable="false"/g, '');
       el.innerHTML = cleanHtml; 

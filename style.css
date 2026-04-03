@@ -161,6 +161,7 @@ button {
   font-size: 0.98rem;
   font-weight: 800;
   transition: transform 0.25s ease, box-shadow 0.25s ease, border-color 0.25s ease, background 0.25s ease;
+  cursor: pointer !important;
 }
 
 .button:hover {
@@ -174,10 +175,14 @@ button {
 }
 
 .button-secondary {
-  color: var(--primary-strong);
-  background: rgba(255, 255, 255, 0.82);
-  border: 1px solid var(--border);
-  box-shadow: var(--shadow-soft);
+  color: #bc6788 !important;
+  background-color: #ffffff !important;
+  background: #ffffff !important;
+  border: 1.5px solid #d98aa7 !important;
+  box-shadow: 0 4px 12px rgba(188, 103, 136, 0.1) !important;
+  opacity: 1 !important;
+  visibility: visible !important;
+  display: inline-flex !important;
 }
 
 .header {
@@ -597,6 +602,44 @@ body.nav-active {
   font-size: 2rem;
   font-family: "Cormorant Garamond", serif;
   color: var(--primary-strong);
+}
+
+.service-card .button {
+  margin-top: 2rem !important;
+  display: flex !important;
+  width: 100% !important;
+  min-height: 52px !important;
+  background-color: #ffffff !important;
+  background: #ffffff !important;
+  color: #bc6788 !important;
+  border: 2px solid #d98aa7 !important;
+  border-radius: 14px !important;
+  padding: 0.8rem 1rem !important;
+  font-weight: 800 !important;
+  font-size: 1.05rem !important;
+  text-decoration: none !important;
+  justify-content: center !important;
+  align-items: center !important;
+  cursor: pointer !important;
+  box-shadow: 0 4px 15px rgba(217, 138, 167, 0.15) !important;
+  transition: all 0.3s ease !important;
+  pointer-events: auto !important;
+  visibility: visible !important;
+  opacity: 1 !important;
+}
+
+.service-card .button:hover {
+  background-color: #d98aa7 !important;
+  color: #ffffff !important;
+  transform: translateY(-3px) !important;
+  box-shadow: 0 6px 15px rgba(217, 138, 167, 0.2) !important;
+}
+
+.editing-mode a.button[href] {
+  pointer-events: auto !important;
+  cursor: pointer !important;
+  user-select: none !important;
+  -webkit-user-select: none !important;
 }
 
 .gallery-section {
@@ -1692,11 +1735,13 @@ body:not(.editing-mode) h3 {
   }
 
   .button-secondary {
-    background: rgba(255, 255, 255, 0.98);
-    color: var(--primary-strong);
-    border: 1px solid rgba(217, 138, 167, 0.25);
-    backdrop-filter: blur(12px);
-    box-shadow: 0 4px 15px rgba(0,0,0,0.05);
+    background: #ffffff !important;
+    color: #bc6788 !important;
+    border: 1.5px solid rgba(217, 138, 167, 0.4) !important;
+    backdrop-filter: none !important;
+    box-shadow: 0 4px 15px rgba(0,0,0,0.08) !important;
+    opacity: 1 !important;
+    visibility: visible !important;
   }
 
   .hero-card-grid,
@@ -1722,4 +1767,33 @@ body:not(.editing-mode) h3 {
     width: 100%;
     justify-content: flex-start;
   }
+}
+
+/* ESTILO DE BOTONES DE SERVICIOS - FORZADO AL FINAL */
+.services-grid a.button.button-secondary {
+  display: flex !important;
+  width: 100% !important;
+  background-color: #ffffff !important;
+  background: #ffffff !important;
+  color: #bc6788 !important;
+  border: 2px solid #d98aa7 !important;
+  border-radius: 12px !important;
+  padding: 1rem !important;
+  margin-top: 1.5rem !important;
+  font-weight: 800 !important;
+  font-size: 1.05rem !important;
+  text-decoration: none !important;
+  justify-content: center !important;
+  align-items: center !important;
+  cursor: pointer !important;
+  box-shadow: 0 4px 15px rgba(217, 138, 167, 0.15) !important;
+  visibility: visible !important;
+  opacity: 1 !important;
+  pointer-events: auto !important;
+}
+
+.services-grid a.button.button-secondary:hover {
+  background-color: #d98aa7 !important;
+  color: #ffffff !important;
+  transform: translateY(-3px) !important;
 }
