@@ -22,7 +22,20 @@ let WORK_SLOTS = loadWorkSlots();
 let CUSTOM_WORK_DAYS = JSON.parse(localStorage.getItem("miri_custom_days") || "{}");
 
 // --- Helper de Fecha Consistente ---
+const normalizeDateStr = (dateStr) => {
+  if (!dateStr || !dateStr.includes("/")) return dateStr;
+  const parts = dateStr.split("/");
+  if (parts.length === 3) return `${parseInt(parts[0])}/${parseInt(parts[1])}/${parts[2]}`;
+  return dateStr;
+};
+
 const formatDate = (date) => `${date.getDate()}/${date.getMonth() + 1}/${date.getFullYear()}`;
+
+// --- Helper de Comparación de Estudios ---
+const isSameStudio = (s1, s2) => {
+  const norm = (s) => (s || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().trim();
+  return norm(s1) === norm(s2);
+};
 
 // --- Configuración de Base de Datos (Supabase) ---
 const CLOUD_URL = "https://hugbaugzsntojbotjblz.supabase.co"; 
@@ -460,8 +473,14 @@ if(currentPage === "reservar") {
       if(bookingsForDay.length > 0) {
         const indicator = document.createElement("div");
         indicator.className = "day-indicator";
-        const hasMonserrat = bookingsForDay.some(b => (typeof b === 'string' || (typeof b === 'object' && b.studio === "Monserrat")));
-        const hasJose = bookingsForDay.some(b => (typeof b === 'object' && b.studio === "José Marmol"));
+        const hasMonserrat = bookingsForDay.some(b => {
+          const studio = typeof b === 'string' ? "Monserrat" : (b.studio || "Monserrat");
+          return isSameStudio(studio, "Monserrat");
+        });
+        const hasJose = bookingsForDay.some(b => {
+          const studio = typeof b === 'object' ? b.studio : null;
+          return isSameStudio(studio, "José Marmol");
+        });
         if(hasMonserrat) indicator.innerHTML += '<span class="dot-indicator monserrat"></span>';
         if(hasJose) indicator.innerHTML += '<span class="dot-indicator jose-marmol"></span>';
         d.appendChild(indicator);
@@ -508,8 +527,9 @@ if(currentPage === "reservar") {
       
       // Verificar si el slot está ocupado para el estudio seleccionado
       const isBooked = allBooked.some(booking => {
-        if (typeof booking === 'string') return booking === t && selStudio === "Monserrat";
-        return booking.time === t && (booking.studio || "Monserrat") === selStudio;
+        const bTime = typeof booking === 'string' ? booking : booking.time;
+        const bStudio = typeof booking === 'string' ? "Monserrat" : (booking.studio || "Monserrat");
+        return bTime === t && isSameStudio(bStudio, selStudio);
       });
 
       if(isBooked) { b.classList.add("booked"); b.disabled=true; }
@@ -556,8 +576,9 @@ if(currentPage === "reservar") {
     const b = JSON.parse(localStorage.getItem("bookedSlots") || "{}"); if(!b[dStr]) b[dStr] = [];
     
     const alreadyBooked = b[dStr].some(booking => {
-      if (typeof booking === 'string') return booking === selT && selStudio === "Monserrat";
-      return booking.time === selT && booking.studio === selStudio;
+      const bTime = typeof booking === 'string' ? booking : booking.time;
+      const bStudio = typeof booking === 'string' ? "Monserrat" : (booking.studio || "Monserrat");
+      return bTime === selT && isSameStudio(bStudio, selStudio);
     });
 
     if(!alreadyBooked) { 
@@ -734,37 +755,28 @@ const syncWithCloud = (manual = false) => {
   if(isCloudEnabled()) {
     cloudFetch("bookings").then(d => { 
       if(d) { 
-        // Obtenemos los turnos actuales del localStorage para mezclarlos
         const localBookings = JSON.parse(localStorage.getItem("bookedSlots") || "{}");
         const cloudBookings = {}; 
         
         d.forEach(b => { 
-          // Normalizar la fecha para asegurar consistencia (ej: 08/04/2026 -> 8/4/2026)
-          let normalizedDate = b.date;
-          if (b.date && b.date.includes("/")) {
-            const parts = b.date.split("/");
-            if (parts.length === 3) {
-              normalizedDate = `${parseInt(parts[0])}/${parseInt(parts[1])}/${parts[2]}`;
-            }
-          }
+          const normalizedDate = normalizeDateStr(b.date);
           if(!cloudBookings[normalizedDate]) cloudBookings[normalizedDate]=[]; 
           cloudBookings[normalizedDate].push({time: b.time, studio: b.studio || "Monserrat", name: b.name || "-"}); 
         }); 
 
-        // Mezclamos: los de la nube mandan, pero mantenemos los locales que NO están en la nube
-        // (Esto evita que un turno recién creado desaparezca antes de que la nube lo procese)
+        // Mezclamos los datos
         const mergedBookings = { ...localBookings };
         
         Object.keys(cloudBookings).forEach(date => {
           if (!mergedBookings[date]) {
             mergedBookings[date] = cloudBookings[date];
           } else {
-            // Para cada fecha, combinamos asegurando que no haya duplicados por hora y estudio
             cloudBookings[date].forEach(cloudB => {
-              const exists = mergedBookings[date].some(localB => 
-                (typeof localB === 'object' && localB.time === cloudB.time && localB.studio === cloudB.studio) ||
-                (typeof localB === 'string' && localB === cloudB.time && cloudB.studio === "Monserrat")
-              );
+              const exists = mergedBookings[date].some(localB => {
+                const lTime = typeof localB === 'string' ? localB : localB.time;
+                const lStudio = typeof localB === 'string' ? "Monserrat" : (localB.studio || "Monserrat");
+                return lTime === cloudB.time && isSameStudio(lStudio, cloudB.studio);
+              });
               if (!exists) {
                 mergedBookings[date].push(cloudB);
               }
@@ -839,11 +851,9 @@ window.releaseSlot = (d, t, s) => {
   const b = JSON.parse(localStorage.getItem("bookedSlots") || "{}");
   if(b[d]) {
     b[d] = b[d].filter(booking => {
-      if (typeof booking === 'object') {
-        return !(booking.time === t && (booking.studio || "Monserrat") === s);
-      } else {
-        return !(booking === t && s === "Monserrat");
-      }
+      const bTime = typeof booking === 'string' ? booking : booking.time;
+      const bStudio = typeof booking === 'string' ? "Monserrat" : (booking.studio || "Monserrat");
+      return !(bTime === t && isSameStudio(bStudio, s));
     }); 
     localStorage.setItem("bookedSlots", JSON.stringify(b));
     if(isCloudEnabled()) cloudDelete("bookings", `${d}-${t}-${s}`);
@@ -876,6 +886,14 @@ document.addEventListener('DOMContentLoaded', () => {
   
   applySavedChanges(); 
   syncWithCloud(); 
+  
+  // Refrescar cuando el usuario vuelve a la pestaña (botón atrás o cambiar de app)
+  window.addEventListener('pageshow', (event) => {
+    if (currentPage === "reservar") {
+      syncWithCloud();
+    }
+  });
+
   if(currentPage === "reservar" && isCloudEnabled()) {
     setInterval(() => syncWithCloud(false), 20000);
   }
