@@ -21,6 +21,9 @@ const loadWorkSlots = () => {
 let WORK_SLOTS = loadWorkSlots();
 let CUSTOM_WORK_DAYS = JSON.parse(localStorage.getItem("miri_custom_days") || "{}");
 
+// --- Helper de Fecha Consistente ---
+const formatDate = (date) => `${date.getDate()}/${date.getMonth() + 1}/${date.getFullYear()}`;
+
 // --- Configuración de Base de Datos (Supabase) ---
 const CLOUD_URL = "https://hugbaugzsntojbotjblz.supabase.co"; 
 const CLOUD_KEY = "sb_publishable_kBQ4L0lrcxnQNIasDakhBw_tmhkeNJs"; 
@@ -361,10 +364,21 @@ const openAdminPanel = () => {
   renderAdminBookings();
 };
 
+let adminTimer = null;
 window.addEventListener("keydown", (e) => {
   if(e.target.tagName === "INPUT" || e.target.tagName === "TEXTAREA") return;
+  
+  clearTimeout(adminTimer);
   adminCommandString += e.key.toLowerCase();
-  if(adminCommandString.includes("miriadmin")) { openAdminPanel(); adminCommandString = ""; }
+  
+  if(adminCommandString.includes("miriadmin")) { 
+    openAdminPanel(); 
+    adminCommandString = ""; 
+  }
+  
+  // Si no se escribe nada en 2 segundos, resetear el comando
+  adminTimer = setTimeout(() => { adminCommandString = ""; }, 2000);
+  
   if(adminCommandString.length > 20) adminCommandString = "";
 });
 
@@ -373,14 +387,7 @@ if(brandLogo) {
   let c = 0; brandLogo.onclick = (e) => { c++; if(c>=5) { e.preventDefault(); openAdminPanel(); c=0; } setTimeout(() => c=0, 3000); };
 }
 
-// --- Lógica de UI (Menú, Reveal, Slider) ---
-const menuToggle = document.querySelector(".menu-toggle");
-const nav = document.querySelector(".nav");
 const currentPage = document.body.dataset.page;
-
-if(menuToggle && nav) {
-  menuToggle.onclick = () => { const open = nav.classList.toggle("is-open"); menuToggle.classList.toggle("is-open", open); };
-}
 
 const revealElements = document.querySelectorAll(".reveal");
 if(revealElements.length) {
@@ -429,7 +436,6 @@ if(currentPage === "reservar") {
       selStudio = btn.dataset.studio;
       document.getElementById("bookingCalendar").style.display = "block";
       renderCal();
-      if(selD) renderSlots(selD.toLocaleDateString("es-ES"));
     };
   });
 
@@ -447,14 +453,14 @@ if(currentPage === "reservar") {
     for(let i=1; i<=last; i++) {
       const d = document.createElement("div"); d.className="calendar-day"; d.textContent=i;
       const dObj = new Date(curr.getFullYear(), curr.getMonth(), i);
-      const dStr = dObj.toLocaleDateString("es-ES");
+      const dStr = formatDate(dObj);
       
       // Indicadores Visuales
       const bookingsForDay = bookedDays[dStr] || [];
       if(bookingsForDay.length > 0) {
         const indicator = document.createElement("div");
         indicator.className = "day-indicator";
-        const hasMonserrat = bookingsForDay.some(b => (typeof b === 'string' || b.studio === "Monserrat"));
+        const hasMonserrat = bookingsForDay.some(b => (typeof b === 'string' || (typeof b === 'object' && b.studio === "Monserrat")));
         const hasJose = bookingsForDay.some(b => (typeof b === 'object' && b.studio === "José Marmol"));
         if(hasMonserrat) indicator.innerHTML += '<span class="dot-indicator monserrat"></span>';
         if(hasJose) indicator.innerHTML += '<span class="dot-indicator jose-marmol"></span>';
@@ -471,10 +477,13 @@ if(currentPage === "reservar") {
           document.getElementById("selectedDateText").textContent=dStr; 
           document.getElementById("slotsContainer").style.display="block"; 
           renderCal(); 
-          renderSlots(dStr); 
         };
       }
       grid.appendChild(d);
+    }
+    // Refrescar slots si ya hay un día seleccionado
+    if (selD && selStudio) {
+      renderSlots(formatDate(selD));
     }
   };
 
@@ -500,7 +509,7 @@ if(currentPage === "reservar") {
       // Verificar si el slot está ocupado para el estudio seleccionado
       const isBooked = allBooked.some(booking => {
         if (typeof booking === 'string') return booking === t && selStudio === "Monserrat";
-        return booking.time === t && booking.studio === selStudio;
+        return booking.time === t && (booking.studio || "Monserrat") === selStudio;
       });
 
       if(isBooked) { b.classList.add("booked"); b.disabled=true; }
@@ -522,7 +531,7 @@ if(currentPage === "reservar") {
 
   document.getElementById("prevMonth").onclick = () => { curr.setMonth(curr.getMonth()-1); renderCal(); };
   document.getElementById("nextMonth").onclick = () => { curr.setMonth(curr.getMonth()+1); renderCal(); };
-  document.getElementById("confirmBooking").onclick = () => {
+  document.getElementById("confirmBooking").onclick = async () => {
     const nameInput = document.getElementById("clientName");
     const name = nameInput.value.trim();
     
@@ -543,7 +552,7 @@ if(currentPage === "reservar") {
     }
 
     if(!selD || !selT || !selStudio) return; 
-    const dStr = selD.toLocaleDateString("es-ES");
+    const dStr = formatDate(selD);
     const b = JSON.parse(localStorage.getItem("bookedSlots") || "{}"); if(!b[dStr]) b[dStr] = [];
     
     const alreadyBooked = b[dStr].some(booking => {
@@ -554,7 +563,17 @@ if(currentPage === "reservar") {
     if(!alreadyBooked) { 
       b[dStr].push({time: selT, studio: selStudio, name: name}); 
       localStorage.setItem("bookedSlots", JSON.stringify(b)); 
-      if(isCloudEnabled()) cloudUpsert("bookings", {id:`${dStr}-${selT}-${selStudio}`, date:dStr, time:selT, studio:selStudio, name: name}); 
+      
+      // Actualizamos la UI localmente de inmediato para mostrarlo gris
+      if (window.__miriRenderCal) window.__miriRenderCal();
+
+      if(isCloudEnabled()) {
+        // ... (el resto del código de cloud sync) ...
+        const success = await cloudUpsert("bookings", {id:`${dStr}-${selT}-${selStudio}`, date:dStr, time:selT, studio:selStudio, name: name});
+        if (!success) {
+          console.warn("Fallo el guardado en la nube, pero se guardó localmente.");
+        }
+      }
     }
     window.open(MERCADO_PAGO_LINK, "_blank");
     const urlParams = new URLSearchParams(window.location.search);
@@ -713,11 +732,60 @@ const applySavedChanges = () => {
 
 const syncWithCloud = (manual = false) => {
   if(isCloudEnabled()) {
-    cloudFetch("bookings").then(d => { if(d) { const c = {}; d.forEach(b => { if(!c[b.date]) c[b.date]=[]; c[b.date].push({time: b.time, studio: b.studio || "Monserrat", name: b.name || "-"}); }); localStorage.setItem("bookedSlots", JSON.stringify(c)); if(currentPage==="reservar" && window.__miriRenderCal) window.__miriRenderCal(); } });
+    cloudFetch("bookings").then(d => { 
+      if(d) { 
+        // Obtenemos los turnos actuales del localStorage para mezclarlos
+        const localBookings = JSON.parse(localStorage.getItem("bookedSlots") || "{}");
+        const cloudBookings = {}; 
+        
+        d.forEach(b => { 
+          // Normalizar la fecha para asegurar consistencia (ej: 08/04/2026 -> 8/4/2026)
+          let normalizedDate = b.date;
+          if (b.date && b.date.includes("/")) {
+            const parts = b.date.split("/");
+            if (parts.length === 3) {
+              normalizedDate = `${parseInt(parts[0])}/${parseInt(parts[1])}/${parts[2]}`;
+            }
+          }
+          if(!cloudBookings[normalizedDate]) cloudBookings[normalizedDate]=[]; 
+          cloudBookings[normalizedDate].push({time: b.time, studio: b.studio || "Monserrat", name: b.name || "-"}); 
+        }); 
+
+        // Mezclamos: los de la nube mandan, pero mantenemos los locales que NO están en la nube
+        // (Esto evita que un turno recién creado desaparezca antes de que la nube lo procese)
+        const mergedBookings = { ...localBookings };
+        
+        Object.keys(cloudBookings).forEach(date => {
+          if (!mergedBookings[date]) {
+            mergedBookings[date] = cloudBookings[date];
+          } else {
+            // Para cada fecha, combinamos asegurando que no haya duplicados por hora y estudio
+            cloudBookings[date].forEach(cloudB => {
+              const exists = mergedBookings[date].some(localB => 
+                (typeof localB === 'object' && localB.time === cloudB.time && localB.studio === cloudB.studio) ||
+                (typeof localB === 'string' && localB === cloudB.time && cloudB.studio === "Monserrat")
+              );
+              if (!exists) {
+                mergedBookings[date].push(cloudB);
+              }
+            });
+          }
+        });
+
+        localStorage.setItem("bookedSlots", JSON.stringify(mergedBookings)); 
+        if(currentPage==="reservar" && window.__miriRenderCal) window.__miriRenderCal(); 
+      } 
+    });
     cloudFetch("config").then(d => { 
       if(d && d[0]) { 
         localStorage.setItem("miri_wa_number", d[0].wa); 
         localStorage.setItem("miri_mp_link", d[0].mp); 
+        WHATSAPP_NUMBER = d[0].wa;
+        MERCADO_PAGO_LINK = d[0].mp;
+        
+        // Actualizar UI si existe el número en el contacto
+        const displayNum = document.getElementById("display-number");
+        if (displayNum) displayNum.textContent = `+${WHATSAPP_NUMBER}`;
       } 
     });
     cloudFetch("page_changes").then(d => { 
@@ -756,16 +824,27 @@ const renderAdminBookings = () => {
   const b = JSON.parse(localStorage.getItem("bookedSlots") || "{}"); t.innerHTML = "";
   Object.keys(b).forEach(d => b[d].forEach(booking => { 
     const r = t.insertRow(); 
-    const studioClass = booking.studio === "Monserrat" ? "monserrat" : "jose-marmol";
-    const clientName = booking.name || "-";
-    r.innerHTML = `<td>${d}</td><td>${booking.time}</td><td><span class="studio-tag ${studioClass}">${booking.studio}</span></td><td>${clientName}</td><td><button onclick="releaseSlot('${d}','${booking.time}','${booking.studio}')">Liberar</button></td>`; 
+    
+    // Soporte para formato antiguo (string) y nuevo (objeto)
+    const time = typeof booking === 'object' ? booking.time : booking;
+    const studio = typeof booking === 'object' ? (booking.studio || "Monserrat") : "Monserrat";
+    const clientName = typeof booking === 'object' ? (booking.name || "-") : "-";
+    
+    const studioClass = studio === "Monserrat" ? "monserrat" : "jose-marmol";
+    r.innerHTML = `<td>${d}</td><td>${time}</td><td><span class="studio-tag ${studioClass}">${studio}</span></td><td>${clientName}</td><td><button onclick="releaseSlot('${d}','${time}','${studio}')">Liberar</button></td>`; 
   }));
 };
 
 window.releaseSlot = (d, t, s) => {
   const b = JSON.parse(localStorage.getItem("bookedSlots") || "{}");
   if(b[d]) {
-    b[d] = b[d].filter(booking => !(booking.time === t && booking.studio === s)); 
+    b[d] = b[d].filter(booking => {
+      if (typeof booking === 'object') {
+        return !(booking.time === t && (booking.studio || "Monserrat") === s);
+      } else {
+        return !(booking === t && s === "Monserrat");
+      }
+    }); 
     localStorage.setItem("bookedSlots", JSON.stringify(b));
     if(isCloudEnabled()) cloudDelete("bookings", `${d}-${t}-${s}`);
     renderAdminBookings();
