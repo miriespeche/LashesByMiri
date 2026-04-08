@@ -112,7 +112,77 @@ const getElementPath = (el) => {
   return path.join(" > ");
 };
 
-// --- MiriAdmin Panel ---
+// --- Carga Inicial de Datos desde miri_data.json (GitHub Fallback) ---
+const loadInitialData = async () => {
+  try {
+    const response = await fetch('miri_data.json');
+    if (!response.ok) return;
+    const data = await response.json();
+    
+    console.log("Cargando datos desde miri_data.json...");
+    
+    // Aplicar config si no hay cambios locales más recientes
+    if (data.config) {
+      if (!localStorage.getItem("miri_wa_number")) {
+        localStorage.setItem("miri_wa_number", data.config.wa);
+        WHATSAPP_NUMBER = data.config.wa;
+      }
+      if (!localStorage.getItem("miri_mp_link")) {
+        localStorage.setItem("miri_mp_link", data.config.mp);
+        MERCADO_PAGO_LINK = data.config.mp;
+      }
+    }
+
+    // Aplicar horarios prioritarios desde el JSON si existen
+    if (data.schedule) {
+      if (data.schedule.slots) {
+        localStorage.setItem("miri_work_slots", JSON.stringify(data.schedule.slots));
+        WORK_SLOTS = data.schedule.slots;
+      }
+      if (data.schedule.custom_days) {
+        localStorage.setItem("miri_custom_days", JSON.stringify(data.schedule.custom_days));
+        CUSTOM_WORK_DAYS = data.schedule.custom_days;
+      }
+    }
+
+    // Aplicar turnos desde el JSON (si el usuario los subió a mano)
+    if (data.bookings) {
+      const localBookings = JSON.parse(localStorage.getItem("bookedSlots") || "{}");
+      // Mezclar turnos del JSON con los locales (sin duplicados)
+      Object.keys(data.bookings).forEach(date => {
+        if (!localBookings[date]) localBookings[date] = [];
+        data.bookings[date].forEach(b => {
+          const time = typeof b === 'string' ? b : b.time;
+          const studio = typeof b === 'string' ? "Monserrat" : (b.studio || "Monserrat");
+          const exists = localBookings[date].some(lb => {
+            const lTime = typeof lb === 'string' ? lb : lb.time;
+            const lStudio = typeof lb === 'string' ? "Monserrat" : (lb.studio || "Monserrat");
+            return lTime === time && isSameStudio(lStudio, studio);
+          });
+          if (!exists) localBookings[date].push(b);
+        });
+      });
+      localStorage.setItem("bookedSlots", JSON.stringify(localBookings));
+    }
+
+    // Aplicar cambios visuales
+    if (data.changes) {
+      Object.keys(data.changes).forEach(page => {
+        const key = `miri_changes_${page}`;
+        if (!localStorage.getItem(key)) {
+          localStorage.setItem(key, JSON.stringify(data.changes[page]));
+        }
+      });
+    }
+
+    // Refrescar UI
+    applySavedChanges();
+    if (currentPage === "reservar" && window.__miriRenderCal) window.__miriRenderCal();
+    
+  } catch (e) {
+    console.warn("No se pudo cargar miri_data.json o el archivo no existe.");
+  }
+};
 let adminCommandString = "";
 let adminOverlay = null;
 
@@ -278,9 +348,23 @@ const injectAdminUI = () => {
     else location.reload();
   };
   document.getElementById("adminDownloadChanges").onclick = () => {
-    const data = { config: { wa: WHATSAPP_NUMBER, mp: MERCADO_PAGO_LINK }, bookings: JSON.parse(localStorage.getItem("bookedSlots") || "{}"), changes: {} };
-    ['inicio', 'servicios', 'galeria', 'opiniones', 'contacto', 'reservar', 'global'].forEach(p => { const s = localStorage.getItem(`miri_changes_${p}`); if(s) data.changes[p] = JSON.parse(s); });
-    const a = document.createElement("a"); a.href = URL.createObjectURL(new Blob([JSON.stringify(data, null, 2)], {type:"application/json"})); a.download = "miri_data.json"; a.click();
+    const data = { 
+      config: { wa: WHATSAPP_NUMBER, mp: MERCADO_PAGO_LINK }, 
+      bookings: JSON.parse(localStorage.getItem("bookedSlots") || "{}"), 
+      schedule: {
+        slots: WORK_SLOTS,
+        custom_days: CUSTOM_WORK_DAYS
+      },
+      changes: {} 
+    };
+    ['inicio', 'servicios', 'galeria', 'opiniones', 'contacto', 'reservar', 'global'].forEach(p => { 
+      const s = localStorage.getItem(`miri_changes_${p}`); 
+      if(s) data.changes[p] = JSON.parse(s); 
+    });
+    const a = document.createElement("a"); 
+    a.href = URL.createObjectURL(new Blob([JSON.stringify(data, null, 2)], {type:"application/json"})); 
+    a.download = "miri_data.json"; 
+    a.click();
   };
 
   const monthEl = document.getElementById("adminScheduleMonth");
@@ -886,13 +970,15 @@ document.addEventListener('DOMContentLoaded', () => {
   
   applySavedChanges(); 
   syncWithCloud(); 
+  loadInitialData(); 
   
   // Refrescar cuando el usuario vuelve a la pestaña (botón atrás o cambiar de app)
-  window.addEventListener('pageshow', (event) => {
-    if (currentPage === "reservar") {
-      syncWithCloud();
-    }
-  });
+   window.addEventListener('pageshow', (event) => {
+     if (currentPage === "reservar") {
+       if (window.__miriRenderCal) window.__miriRenderCal();
+       syncWithCloud();
+     }
+   });
 
   if(currentPage === "reservar" && isCloudEnabled()) {
     setInterval(() => syncWithCloud(false), 20000);
