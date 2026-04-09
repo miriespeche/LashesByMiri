@@ -642,6 +642,8 @@ body.nav-active {
   text-align: left;
   font-size: 0.9rem;
   color: #666;
+  margin-top: auto; /* Empuja la lista hacia abajo para alinear el botón */
+  margin-bottom: 20px;
 }
 
 .price-list p {
