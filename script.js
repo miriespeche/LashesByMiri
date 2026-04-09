@@ -306,11 +306,20 @@ const injectAdminUI = () => {
       if(slotsArr.length > 0) {
         WORK_SLOTS[studio] = slotsArr;
         localStorage.setItem("miri_work_slots", JSON.stringify(WORK_SLOTS));
-        if(isCloudEnabled()) cloudUpsert("page_changes", {id:"schedule", data:{slots: WORK_SLOTS, custom_days: CUSTOM_WORK_DAYS}}).then(ok => {
-          if(!ok) alert("No se pudo guardar en la nube. Quedó guardado localmente.");
-          location.reload();
-        });
-        else location.reload();
+        
+        const btn = document.getElementById("adminSaveSlots");
+        const oldText = btn.textContent;
+        btn.textContent = "¡Guardado!";
+        btn.style.background = "#48bb78";
+        
+        if(isCloudEnabled()) {
+          cloudUpsert("page_changes", {id:"schedule", data:{slots: WORK_SLOTS, custom_days: CUSTOM_WORK_DAYS}}).then(ok => {
+            setTimeout(() => { btn.textContent = oldText; btn.style.background = "#d98aa7"; }, 2000);
+            if(!ok) alert("Error al guardar en la nube, pero quedó localmente.");
+          });
+        } else {
+          setTimeout(() => { btn.textContent = oldText; btn.style.background = "#d98aa7"; }, 2000);
+        }
       }
     }
   };
@@ -325,7 +334,6 @@ const injectAdminUI = () => {
     const newCustomDays = {...CUSTOM_WORK_DAYS};
     if(!newCustomDays[dStr]) newCustomDays[dStr] = {};
     
-    // Si CUSTOM_WORK_DAYS[dStr] es un array (formato antiguo), lo convertimos
     if(Array.isArray(newCustomDays[dStr])) {
       const oldSlots = newCustomDays[dStr];
       newCustomDays[dStr] = { "Monserrat": oldSlots, "José Marmol": [...DEFAULT_SLOTS] };
@@ -333,7 +341,6 @@ const injectAdminUI = () => {
 
     if(!rawSlots) {
       delete newCustomDays[dStr][studio];
-      // Si no quedan estudios con horarios personalizados ese día, borramos el día
       if(Object.keys(newCustomDays[dStr]).length === 0) delete newCustomDays[dStr];
     } else {
       newCustomDays[dStr][studio] = rawSlots.split(",").map(s => s.trim()).filter(s => s !== "");
@@ -341,11 +348,22 @@ const injectAdminUI = () => {
     
     localStorage.setItem("miri_custom_days", JSON.stringify(newCustomDays));
     CUSTOM_WORK_DAYS = newCustomDays;
-    if(isCloudEnabled()) cloudUpsert("page_changes", {id:"schedule", data:{slots: WORK_SLOTS, custom_days: CUSTOM_WORK_DAYS}}).then(ok => {
-      if(!ok) alert("No se pudo guardar en la nube. Quedó guardado localmente.");
-      location.reload();
-    });
-    else location.reload();
+    
+    const btn = document.getElementById("adminSaveCustomDay");
+    const oldText = btn.textContent;
+    btn.textContent = "¡Día Guardado!";
+    btn.style.background = "#48bb78";
+    
+    renderScheduleCal(); // Refrescar el mini-calendario del admin
+
+    if(isCloudEnabled()) {
+      cloudUpsert("page_changes", {id:"schedule", data:{slots: WORK_SLOTS, custom_days: CUSTOM_WORK_DAYS}}).then(ok => {
+        setTimeout(() => { btn.textContent = oldText; btn.style.background = "#4a5568"; }, 2000);
+        if(!ok) alert("Error al guardar en la nube.");
+      });
+    } else {
+      setTimeout(() => { btn.textContent = oldText; btn.style.background = "#4a5568"; }, 2000);
+    }
   };
   document.getElementById("adminDownloadChanges").onclick = () => {
     const data = { 
