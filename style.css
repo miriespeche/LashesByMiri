@@ -604,6 +604,23 @@ body.nav-active {
   color: var(--primary-strong);
 }
 
+.price-list {
+  margin: 10px 0;
+  text-align: left;
+  font-size: 0.9rem;
+  color: #666;
+}
+
+.price-list p {
+  margin: 5px 0;
+  display: flex;
+  justify-content: space-between;
+}
+
+.price-list strong {
+  color: #1a1a1a;
+}
+
 .service-card .button {
   margin-top: 2rem !important;
   display: flex !important;
