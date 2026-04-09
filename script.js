@@ -570,7 +570,8 @@ if(currentPage === "reservar") {
         d.appendChild(indicator);
       }
 
-      if(dObj < today) d.classList.add("disabled");
+      const isSunday = dObj.getDay() === 0;
+      if(dObj < today || isSunday) d.classList.add("disabled");
       else {
         if(dObj.getTime()===today.getTime()) d.classList.add("today");
         if(selD && dObj.toDateString()===selD.toDateString()) d.classList.add("selected");
@@ -696,7 +697,7 @@ const enableVisualEditing = () => {
   document.body.appendChild(bar);
   
   // Textos editables
-  document.querySelectorAll('p, h1, h2, h3, span, strong, small, figcaption, .eyebrow, .button:not([href]), .service-card h3, .service-price').forEach(el => { 
+  document.querySelectorAll('p, h1, h2, h3, span, strong, small, figcaption, .eyebrow, .button:not([href]), .service-card h3, .service-price, .price-list p').forEach(el => { 
     if(!el.closest('.admin-overlay') && !el.closest('.nav') && !el.classList.contains('menu-toggle')) {
       el.contentEditable = "true";
       el.setAttribute('spellcheck', 'false'); // Desactivar subrayado rojo de ortografía
@@ -806,6 +807,12 @@ const applySavedChanges = () => {
   const d = JSON.parse(s); 
   
   if (d.texts) Object.keys(d.texts).forEach(p => { 
+      // Evitar aplicar cambios automáticos a la cuadrícula de servicios si no estamos en modo edición
+      // para que el HTML manual de servicios.html sea el que mande.
+      if (!isEditing && (p.includes("services-grid") || p.includes("article:nth-of-type("))) {
+        if (currentPage === "servicios") return;
+      }
+
     const el = document.querySelector(p); 
     // Permitir editar textos de servicios (h3 y price) incluso si son botones
     const isServiceText = el && (el.classList.contains('service-price') || (el.parentElement && el.parentElement.classList.contains('service-card') && el.tagName === 'H3'));
