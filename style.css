@@ -702,6 +702,37 @@ body.nav-active {
   padding-top: 5rem;
 }
 
+.google-badge {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-bottom: 12px;
+  font-size: 0.9rem;
+}
+
+.google-badge .stars {
+  color: #fbbc05;
+  letter-spacing: 1px;
+}
+
+.google-btn {
+  display: inline-flex;
+  align-items: center;
+  padding: 12px 24px;
+  border-radius: 50px;
+  font-weight: 600;
+  transition: all 0.3s ease;
+  border: 1px solid #ddd;
+  background: white;
+  color: #333;
+}
+
+.google-btn:hover {
+  background: #f8f9fa;
+  transform: translateY(-2px);
+  box-shadow: 0 4px 12px rgba(0,0,0,0.1);
+}
+
 .testimonials-card {
   padding: 1.5rem;
   overflow: hidden;
