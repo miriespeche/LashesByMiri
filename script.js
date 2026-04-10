@@ -169,9 +169,8 @@ const loadInitialData = async () => {
     if (data.changes) {
       Object.keys(data.changes).forEach(page => {
         const key = `miri_changes_${page}`;
-        if (!localStorage.getItem(key)) {
-          localStorage.setItem(key, JSON.stringify(data.changes[page]));
-        }
+        // Prioridad total a los cambios del JSON (GitHub) sobre los locales
+        localStorage.setItem(key, JSON.stringify(data.changes[page]));
       });
     }
 
@@ -826,13 +825,24 @@ const applySavedChanges = () => {
   
   if (d.texts) Object.keys(d.texts).forEach(p => { 
     const el = document.querySelector(p); 
-    // Permitir editar textos de servicios (h3 y price) incluso si son botones
+    
+    // NO sobrescribir elementos críticos que contienen indicadores visuales (dots)
+    if (el && (el.classList.contains('studio-button') || el.closest('.studio-selector') || el.classList.contains('calendar-day'))) {
+      if (!isEditing) return;
+    }
+
+    // Permitir editar textos de servicios incluso si son botones
     const isServiceText = el && (el.classList.contains('service-price') || (el.parentElement && el.parentElement.classList.contains('service-card') && el.tagName === 'H3') || el.closest('.price-list'));
     
     if (el && !el.classList.contains('menu-toggle') && (!el.classList.contains('button') || isServiceText) && d.texts[p] !== undefined && d.texts[p] !== null) {
       // Limpiar el HTML de posibles atributos contenteditable que se hayan filtrado
       let cleanHtml = d.texts[p].replace(/contenteditable="true"/g, '').replace(/contenteditable="false"/g, '');
-      el.innerHTML = cleanHtml; 
+      
+      // SOLO aplicamos el cambio si el contenido es realmente diferente para evitar loops o parpadeos
+      if (el.innerHTML !== cleanHtml) {
+        el.innerHTML = cleanHtml; 
+      }
+      
       // Asegurar que no sea editable si no estamos en modo edición
       if (!isEditing) el.contentEditable = "false";
     }
@@ -945,7 +955,7 @@ const renderAdminBookings = () => {
     const studio = typeof booking === 'object' ? (booking.studio || "Monserrat") : "Monserrat";
     const clientName = typeof booking === 'object' ? (booking.name || "-") : "-";
     
-    const studioClass = studio === "Monserrat" ? "monserrat" : "jose-marmol";
+    const studioClass = isSameStudio(studio, "Monserrat") ? "monserrat" : "jose-marmol";
     r.innerHTML = `<td>${d}</td><td>${time}</td><td><span class="studio-tag ${studioClass}">${studio}</span></td><td>${clientName}</td><td><button onclick="releaseSlot('${d}','${time}','${studio}')">Liberar</button></td>`; 
   }));
 };
