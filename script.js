@@ -825,15 +825,9 @@ const applySavedChanges = () => {
   const d = JSON.parse(s); 
   
   if (d.texts) Object.keys(d.texts).forEach(p => { 
-      // Evitar aplicar cambios automáticos a la cuadrícula de servicios si no estamos en modo edición
-      // para que el HTML manual de servicios.html sea el que mande.
-      if (!isEditing && (p.includes("services-grid") || p.includes("article:nth-of-type("))) {
-        if (currentPage === "servicios") return;
-      }
-
     const el = document.querySelector(p); 
     // Permitir editar textos de servicios (h3 y price) incluso si son botones
-    const isServiceText = el && (el.classList.contains('service-price') || (el.parentElement && el.parentElement.classList.contains('service-card') && el.tagName === 'H3'));
+    const isServiceText = el && (el.classList.contains('service-price') || (el.parentElement && el.parentElement.classList.contains('service-card') && el.tagName === 'H3') || el.closest('.price-list'));
     
     if (el && !el.classList.contains('menu-toggle') && (!el.classList.contains('button') || isServiceText) && d.texts[p] !== undefined && d.texts[p] !== null) {
       // Limpiar el HTML de posibles atributos contenteditable que se hayan filtrado
