@@ -862,26 +862,57 @@ if(currentPage === "reservar") {
       }
     }
 
-    // --- Flujo de Redirección ---
+    // --- Flujo de Redirección Mejorado ---
     const waText = encodeURIComponent(`Hola! Quiero confirmar mi turno para ${selectedService} en ${selStudio}: ${dStr} a las ${selT} a nombre de ${name}. Ya realicé el pago de la seña.`);
     const waUrl = `https://wa.me/${WHATSAPP_NUMBER}?text=${waText}`;
 
+    // Guardamos en sessionStorage para cuando el usuario regrese de Mercado Pago
     sessionStorage.setItem("pendingWA", waUrl);
-    window.location.href = MERCADO_PAGO_LINK;
+    
+    // Cambiar estado visual antes de la redirección
+    btn.textContent = "¡Listo! Redirigiendo...";
+    
+    // Pequeño delay para asegurar que el guardado y el storage se procesen
+    setTimeout(() => {
+      if (MERCADO_PAGO_LINK) {
+        window.location.href = MERCADO_PAGO_LINK;
+      } else {
+        alert("Error: Link de pago no configurado. Por favor, contactanos por WhatsApp.");
+        window.location.href = waUrl;
+      }
+    }, 600);
   };
   renderCal();
 }
 
-// Lógica para detectar si volvemos de Mercado Pago y disparar WhatsApp
-window.addEventListener('load', () => {
+// --- Gestión de Redirección Post-Pago (WhatsApp) ---
+const checkPendingWA = () => {
   const pendingWA = sessionStorage.getItem("pendingWA");
   if (pendingWA) {
     sessionStorage.removeItem("pendingWA");
-    // Pequeño delay para que la página cargue y el usuario entienda qué pasa
+    
+    // Feedback visual para el usuario
+    const overlay = document.createElement("div");
+    overlay.style = "position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(255,255,255,0.95);z-index:10000;display:flex;flex-direction:column;align-items:center;justify-content:center;font-family:sans-serif;text-align:center;padding:2rem;";
+    overlay.innerHTML = `
+      <div style="font-size:1.5rem;color:#d4af37;margin-bottom:1rem;font-weight:bold;">¡Turno Agendado!</div>
+      <p style="margin-bottom:1.5rem;color:#333;">Redirigiendo a WhatsApp para confirmar los detalles finales...</p>
+      <div class="loader-simple" style="width:40px;height:40px;border:4px solid #f3f3f3;border-top:4px solid #d4af37;border-radius:50%;animation:spin 1s linear infinite;"></div>
+      <style>@keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }</style>
+    `;
+    document.body.appendChild(overlay);
+
     setTimeout(() => {
       window.location.href = pendingWA;
-    }, 1500);
+    }, 2000);
   }
+};
+
+// Ejecutar en múltiples eventos para asegurar que se dispare al volver de MP
+window.addEventListener('load', checkPendingWA);
+if (document.readyState === 'complete') checkPendingWA();
+document.addEventListener('visibilitychange', () => {
+  if (document.visibilityState === 'visible') checkPendingWA();
 });
 
 // --- Edición y Sincronización ---
