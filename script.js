@@ -70,7 +70,10 @@ const cloudFetch = async (table) => {
 const cloudUpsert = async (table, data) => {
   if (!isCloudEnabled()) return false;
   try {
-    const response = await fetch(`${SUPABASE_URL}/rest/v1/${table}`, {
+    // Para Supabase/PostgREST, el upsert se hace con POST y los headers adecuados.
+    // Añadimos on_conflict para ser más explícitos si hay una columna ID.
+    const url = `${SUPABASE_URL}/rest/v1/${table}`;
+    const response = await fetch(url, {
       method: "POST",
       headers: { 
         "apikey": SUPABASE_KEY, 
@@ -80,9 +83,17 @@ const cloudUpsert = async (table, data) => {
       },
       body: JSON.stringify(data)
     });
+
     if (!response.ok) {
-      const err = await response.json();
-      console.error("Error en cloudUpsert:", err);
+      // Intentar leer el error detallado
+      let errorDetail = "";
+      try {
+        const err = await response.json();
+        errorDetail = JSON.stringify(err);
+        console.error("Error detallado en cloudUpsert:", err);
+      } catch (e) {
+        errorDetail = response.statusText;
+      }
       return false;
     }
     console.log(`Guardado exitoso en la nube (${table})`);
@@ -700,33 +711,51 @@ if(currentPage === "reservar") {
 
     if(!selD || !selT || !selStudio) return; 
     const dStr = formatDate(selD);
-    const b = JSON.parse(localStorage.getItem("bookedSlots") || "{}"); if(!b[dStr]) b[dStr] = [];
     
+    // Re-verificar disponibilidad justo antes de reservar para evitar colisiones
+    const b = JSON.parse(localStorage.getItem("bookedSlots") || "{}"); if(!b[dStr]) b[dStr] = [];
     const alreadyBooked = b[dStr].some(booking => {
       const bTime = typeof booking === 'string' ? booking : booking.time;
       const bStudio = typeof booking === 'string' ? "Monserrat" : (booking.studio || "Monserrat");
       return bTime === selT && isSameStudio(bStudio, selStudio);
     });
 
-    if(!alreadyBooked) { 
-      b[dStr].push({time: selT, studio: selStudio, name: name}); 
-      localStorage.setItem("bookedSlots", JSON.stringify(b)); 
-      
-      // Actualizamos la UI localmente de inmediato para mostrarlo gris
+    if(alreadyBooked) {
+      alert("Lo sentimos, este turno acaba de ser reservado. Por favor, selecciona otro horario.");
       if (window.__miriRenderCal) window.__miriRenderCal();
+      return;
+    }
 
-      if(isCloudEnabled()) {
-        // BLOQUEO CRÍTICO: Esperamos a que la nube confirme el guardado antes de irnos de la página
-        // Generamos un ID seguro (sin caracteres especiales ni espacios)
-        const safeId = `${dStr}-${selT}-${selStudio}`.replace(/[\/\s:]/g, "-").normalize("NFD").replace(/[\u0300-\u036f]/g, "");
-        
-        try {
-          const success = await cloudUpsert("bookings", {id: safeId, date:dStr, time:selT, studio:selStudio, name: name});
-          if (!success) {
-            alert("Atención: El turno se guardó en tu dispositivo pero hubo un problema al sincronizarlo globalmente. Por favor, avisale a Miri por WhatsApp.");
+    // Bloqueo temporal para evitar clics múltiples
+    const btn = document.getElementById("confirmBooking");
+    const oldText = btn.textContent;
+    btn.disabled = true;
+    btn.textContent = "Procesando...";
+
+    // 1. Guardado Local
+    b[dStr].push({time: selT, studio: selStudio, name: name}); 
+    localStorage.setItem("bookedSlots", JSON.stringify(b)); 
+    if (window.__miriRenderCal) window.__miriRenderCal();
+
+    // 2. Guardado en la Nube (BLOQUEO CRÍTICO)
+    if(isCloudEnabled()) {
+      const safeId = `${dStr}-${selT}-${selStudio}`.replace(/[\/\s:]/g, "-").normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+      const success = await cloudUpsert("bookings", {id: safeId, date:dStr, time:selT, studio:selStudio, name: name});
+      
+      if (!success) {
+        btn.disabled = false;
+        btn.textContent = oldText;
+        // Si falla la nube, le damos la opción de seguir (solo local) o cancelar
+        const proceed = confirm("No pudimos sincronizar tu turno globalmente por un problema de conexión. ¿Deseas continuar con el pago de todos modos? (Tendrás que confirmar con Miri por WhatsApp)");
+        if (!proceed) {
+          // Si cancela, removemos el turno local que acabamos de agregar
+          const currentBookings = JSON.parse(localStorage.getItem("bookedSlots") || "{}");
+          if (currentBookings[dStr]) {
+            currentBookings[dStr] = currentBookings[dStr].filter(b => !(b.time === selT && isSameStudio(b.studio, selStudio)));
+            localStorage.setItem("bookedSlots", JSON.stringify(currentBookings));
           }
-        } catch (e) {
-          console.error("Error bloqueando turno en la nube:", e);
+          if (window.__miriRenderCal) window.__miriRenderCal();
+          return;
         }
       }
     }
@@ -737,14 +766,7 @@ if(currentPage === "reservar") {
     const waText = encodeURIComponent(`Hola! Quiero confirmar mi turno para ${selectedService} en ${selStudio}: ${dStr} a las ${selT} a nombre de ${name}. Ya realicé el pago de la seña.`);
     const waUrl = `https://wa.me/${WHATSAPP_NUMBER}?text=${waText}`;
 
-    // 1. Abrimos Mercado Pago en la misma pestaña para asegurar que el usuario pague
-    // 2. Usamos el historial del navegador para que cuando el usuario pague y vuelva (o cierre), 
-    //    sea redirigido a WhatsApp si ya completó el proceso.
-    
-    // Guardamos en sessionStorage que hay una redirección pendiente a WhatsApp
     sessionStorage.setItem("pendingWA", waUrl);
-    
-    // Redirigir a Mercado Pago
     window.location.href = MERCADO_PAGO_LINK;
   };
   renderCal();
