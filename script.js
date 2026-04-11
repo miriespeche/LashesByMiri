@@ -248,8 +248,8 @@ const loadInitialData = async () => {
       }
     }
 
-    // Aplicar turnos desde el JSON (si el usuario los subió a mano)
-    if (data.bookings) {
+    // Aplicar turnos desde el JSON solo si no estamos usando la nube como fuente principal
+    if (data.bookings && !isCloudEnabled()) {
       // Usamos una función de mezcla única para evitar duplicados y race conditions
       const localBookings = JSON.parse(localStorage.getItem("bookedSlots") || "{}");
       let changed = false;
@@ -276,6 +276,8 @@ const loadInitialData = async () => {
         localStorage.setItem("bookedSlots", JSON.stringify(localBookings));
         console.log("Turnos del JSON mezclados con éxito.");
       }
+    } else if (data.bookings && isCloudEnabled()) {
+      console.log("Se ignoraron los turnos del JSON porque la nube está activa.");
     }
 
     // Aplicar cambios visuales

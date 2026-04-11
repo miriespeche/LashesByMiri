@@ -5,29 +5,7 @@
     "supabase_url": "https://hugbaugzsntojbotjblz.supabase.co",
     "supabase_key": "sb_publishable_kBQ4L0lrcxnQNIasDakhBw_tmhkeNJs"
   },
-  "bookings": {
-    "1/4/2026": [
-      {
-        "time": "09:00",
-        "studio": "Monserrat",
-        "name": "-"
-      },
-      {
-        "time": "10:00",
-        "studio": "Monserrat",
-        "name": "-"
-      }
-    ],
-    "9/4/2026": [],
-    "11/4/2026": [],
-    "10/4/2026": [
-      {
-        "time": "11:00",
-        "studio": "Monserrat",
-        "name": "tomy"
-      }
-    ]
-  },
+  "bookings": {},
   "schedule": {
     "slots": {
       "Monserrat": [
