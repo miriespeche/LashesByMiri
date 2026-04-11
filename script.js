@@ -27,12 +27,16 @@ const normalizeDateStr = (dateStr) => {
   // Caso 1: Formato d/m/yyyy (ej: 8/4/2026 o 08/04/2026)
   if (dateStr.includes("/")) {
     const parts = dateStr.split("/");
-    if (parts.length === 3) return `${parseInt(parts[0])}/${parseInt(parts[1])}/${parts[2]}`;
+    if (parts.length === 3) {
+      // Forzamos d/m/yyyy sin ceros a la izquierda para consistencia total
+      return `${parseInt(parts[0])}/${parseInt(parts[1])}/${parts[2]}`;
+    }
   }
-  // Caso 2: Formato ISO yyyy-mm-dd (que suele devolver Supabase si la columna es tipo DATE)
+  // Caso 2: Formato ISO yyyy-mm-dd (que suele devolver Supabase)
   if (dateStr.includes("-")) {
-    const parts = dateStr.split("T")[0].split("-"); // Limpiamos la T si existe
+    const parts = dateStr.split("T")[0].split("-");
     if (parts.length === 3 && parts[0].length === 4) {
+      // Convertimos yyyy-mm-dd a d/m/yyyy
       return `${parseInt(parts[2])}/${parseInt(parts[1])}/${parts[0]}`;
     }
   }
@@ -604,9 +608,10 @@ if(currentPage === "reservar") {
       const d = document.createElement("div"); d.className="calendar-day"; d.textContent=i;
       const dObj = new Date(curr.getFullYear(), curr.getMonth(), i);
       const dStr = formatDate(dObj);
+      const normD = normalizeDateStr(dStr);
       
       // Indicadores Visuales
-      const bookingsForDay = bookedDays[dStr] || [];
+      const bookingsForDay = bookedDays[normD] || [];
       if(bookingsForDay.length > 0) {
         const indicator = document.createElement("div");
         indicator.className = "day-indicator";
@@ -646,11 +651,12 @@ if(currentPage === "reservar") {
 
   const renderSlots = (dStr) => {
     slotsGrid.innerHTML = ""; 
-    const allBooked = JSON.parse(localStorage.getItem("bookedSlots") || "{}")[dStr] || [];
+    const normD = normalizeDateStr(dStr);
+    const allBooked = JSON.parse(localStorage.getItem("bookedSlots") || "{}")[normD] || [];
     
     // Priorizar horarios específicos por fecha y estudio
     let daySlots = WORK_SLOTS[selStudio];
-    const custom = CUSTOM_WORK_DAYS[dStr];
+    const custom = CUSTOM_WORK_DAYS[normD];
     if (custom) {
       if (Array.isArray(custom)) {
         // Compatibilidad con formato antiguo
@@ -739,19 +745,20 @@ if(currentPage === "reservar") {
 
     // 2. Guardado en la Nube (BLOQUEO CRÍTICO)
     if(isCloudEnabled()) {
-      const safeId = `${dStr}-${selT}-${selStudio}`.replace(/[\/\s:]/g, "-").normalize("NFD").replace(/[\u0300-\u036f]/g, "");
-      const success = await cloudUpsert("bookings", {id: safeId, date:dStr, time:selT, studio:selStudio, name: name});
+      // Normalizamos el ID para que sea idéntico en todos los dispositivos
+      const normD = normalizeDateStr(dStr);
+      const safeId = `${normD}-${selT}-${selStudio}`.replace(/[\/\s:]/g, "-").normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+      
+      const success = await cloudUpsert("bookings", {id: safeId, date: normD, time: selT, studio: selStudio, name: name});
       
       if (!success) {
         btn.disabled = false;
         btn.textContent = oldText;
-        // Si falla la nube, le damos la opción de seguir (solo local) o cancelar
-        const proceed = confirm("No pudimos sincronizar tu turno globalmente por un problema de conexión. ¿Deseas continuar con el pago de todos modos? (Tendrás que confirmar con Miri por WhatsApp)");
+        const proceed = confirm("No pudimos sincronizar tu turno globalmente. ¿Deseas continuar con el pago? (Tendrás que avisarle a Miri)");
         if (!proceed) {
-          // Si cancela, removemos el turno local que acabamos de agregar
           const currentBookings = JSON.parse(localStorage.getItem("bookedSlots") || "{}");
-          if (currentBookings[dStr]) {
-            currentBookings[dStr] = currentBookings[dStr].filter(b => !(b.time === selT && isSameStudio(b.studio, selStudio)));
+          if (currentBookings[normD]) {
+            currentBookings[normD] = currentBookings[normD].filter(b => !(b.time === selT && isSameStudio(b.studio, selStudio)));
             localStorage.setItem("bookedSlots", JSON.stringify(currentBookings));
           }
           if (window.__miriRenderCal) window.__miriRenderCal();
