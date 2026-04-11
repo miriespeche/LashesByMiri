@@ -23,9 +23,19 @@ let CUSTOM_WORK_DAYS = JSON.parse(localStorage.getItem("miri_custom_days") || "{
 
 // --- Helper de Fecha Consistente ---
 const normalizeDateStr = (dateStr) => {
-  if (!dateStr || !dateStr.includes("/")) return dateStr;
-  const parts = dateStr.split("/");
-  if (parts.length === 3) return `${parseInt(parts[0])}/${parseInt(parts[1])}/${parts[2]}`;
+  if (!dateStr) return dateStr;
+  // Caso 1: Formato d/m/yyyy (ej: 8/4/2026 o 08/04/2026)
+  if (dateStr.includes("/")) {
+    const parts = dateStr.split("/");
+    if (parts.length === 3) return `${parseInt(parts[0])}/${parseInt(parts[1])}/${parts[2]}`;
+  }
+  // Caso 2: Formato ISO yyyy-mm-dd (que suele devolver Supabase si la columna es tipo DATE)
+  if (dateStr.includes("-")) {
+    const parts = dateStr.split("-");
+    if (parts.length === 3 && parts[0].length === 4) {
+      return `${parseInt(parts[2])}/${parseInt(parts[1])}/${parts[0]}`;
+    }
+  }
   return dateStr;
 };
 
@@ -696,11 +706,13 @@ if(currentPage === "reservar") {
 
       if(isCloudEnabled()) {
         // BLOQUEO CRÍTICO: Esperamos a que la nube confirme el guardado antes de irnos de la página
-        // Esto asegura que el turno se bloquee para TODOS los dispositivos.
+        // Generamos un ID seguro (sin caracteres especiales ni espacios)
+        const safeId = `${dStr}-${selT}-${selStudio}`.replace(/[\/\s:]/g, "-").normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+        
         try {
-          const success = await cloudUpsert("bookings", {id:`${dStr}-${selT}-${selStudio}`, date:dStr, time:selT, studio:selStudio, name: name});
+          const success = await cloudUpsert("bookings", {id: safeId, date:dStr, time:selT, studio:selStudio, name: name});
           if (!success) {
-            console.warn("Fallo el guardado en la nube, pero se guardó localmente.");
+            alert("Atención: El turno se guardó en tu dispositivo pero hubo un problema al sincronizarlo globalmente. Por favor, avisale a Miri por WhatsApp.");
           }
         } catch (e) {
           console.error("Error bloqueando turno en la nube:", e);
@@ -853,7 +865,11 @@ const applySavedChanges = () => {
   if (displayNum) displayNum.textContent = `+${WHATSAPP_NUMBER}`;
 
   const isEditing = document.body.classList.contains('editing-mode');
-  const s = localStorage.getItem(`miri_changes_${currentPage || 'global'}`); if(!s) return;
+  const s = localStorage.getItem(`miri_changes_${currentPage || 'global'}`); if(!s) {
+    // Si no hay cambios locales, mostrar la página (por si estaba oculta)
+    document.body.style.opacity = "1";
+    return;
+  }
   const d = JSON.parse(s); 
   
   if (d.texts) Object.keys(d.texts).forEach(p => { 
@@ -868,15 +884,8 @@ const applySavedChanges = () => {
     const isServiceText = el && (el.classList.contains('service-price') || (el.parentElement && el.parentElement.classList.contains('service-card') && el.tagName === 'H3') || el.closest('.price-list'));
     
     if (el && !el.classList.contains('menu-toggle') && (!el.classList.contains('button') || isServiceText) && d.texts[p] !== undefined && d.texts[p] !== null) {
-      // Limpiar el HTML de posibles atributos contenteditable que se hayan filtrado
       let cleanHtml = d.texts[p].replace(/contenteditable="true"/g, '').replace(/contenteditable="false"/g, '');
-      
-      // SOLO aplicamos el cambio si el contenido es realmente diferente para evitar loops o parpadeos
-      if (el.innerHTML !== cleanHtml) {
-        el.innerHTML = cleanHtml; 
-      }
-      
-      // Asegurar que no sea editable si no estamos en modo edición
+      if (el.innerHTML !== cleanHtml) el.innerHTML = cleanHtml; 
       if (!isEditing) el.contentEditable = "false";
     }
   });
@@ -884,17 +893,20 @@ const applySavedChanges = () => {
     const el = document.querySelector(p); 
     if (el) {
       let src = d.images[p];
-      // Si el formato es un objeto (como en miri_data.json), extraemos la URL
-      if (typeof src === 'object' && src !== null && src.src) {
-        src = src.src;
-      }
-      // Solo aplicamos si es un string válido (URL o Base64)
+      if (typeof src === 'object' && src !== null && src.src) src = src.src;
       if (typeof src === 'string') {
-        if (el.tagName === 'IMG') el.src = src;
-        else el.style.backgroundImage = `url("${src}")`;
+        if (el.tagName === 'IMG') {
+          if (el.src !== src) el.src = src;
+        } else {
+          const url = `url("${src}")`;
+          if (el.style.backgroundImage !== url) el.style.backgroundImage = url;
+        }
       }
     }
   });
+  
+  // Una vez aplicados los cambios, mostramos el cuerpo de la página
+  document.body.style.opacity = "1";
 };
 
 const syncWithCloud = (manual = false) => {
@@ -915,21 +927,22 @@ const syncWithCloud = (manual = false) => {
         
         // Añadimos lo local que no esté en la nube todavía (por si el usuario acaba de reservar)
         Object.keys(localBookings).forEach(date => {
-          if (!mergedBookings[date]) {
-            mergedBookings[date] = localBookings[date];
+          const normLocalDate = normalizeDateStr(date);
+          if (!mergedBookings[normLocalDate]) {
+            mergedBookings[normLocalDate] = localBookings[date];
           } else {
             localBookings[date].forEach(localB => {
               const lTime = typeof localB === 'string' ? localB : localB.time;
               const lStudio = typeof localB === 'string' ? "Monserrat" : (localB.studio || "Monserrat");
               
-              const alreadyInMerged = mergedBookings[date].some(mB => {
+              const alreadyInMerged = mergedBookings[normLocalDate].some(mB => {
                 const mTime = typeof mB === 'string' ? mB : mB.time;
                 const mStudio = typeof mB === 'string' ? "Monserrat" : (mB.studio || "Monserrat");
                 return mTime === lTime && isSameStudio(mStudio, lStudio);
               });
               
               if (!alreadyInMerged) {
-                mergedBookings[date].push(localB);
+                mergedBookings[normLocalDate].push(localB);
               }
             });
           }
@@ -1021,7 +1034,10 @@ window.releaseSlot = (d, t, s) => {
       return !(bTime === t && isSameStudio(bStudio, s));
     }); 
     localStorage.setItem("bookedSlots", JSON.stringify(b));
-    if(isCloudEnabled()) cloudDelete("bookings", `${d}-${t}-${s}`);
+    if(isCloudEnabled()) {
+      const safeId = `${d}-${t}-${s}`.replace(/[\/\s:]/g, "-").normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+      cloudDelete("bookings", safeId);
+    }
     renderAdminBookings();
   }
 };

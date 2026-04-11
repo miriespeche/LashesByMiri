@@ -39,6 +39,8 @@ body {
     radial-gradient(circle at top left, rgba(244, 215, 225, 0.85), transparent 28%),
     radial-gradient(circle at right 12% top 8%, rgba(240, 217, 203, 0.4), transparent 18%),
     linear-gradient(180deg, #fffdfb 0%, #fff7fa 46%, #fffaf7 100%);
+  opacity: 0; /* Ocultar inicialmente para evitar parpadeo de contenido viejo */
+  transition: opacity 0.3s ease;
 }
 
 img {
