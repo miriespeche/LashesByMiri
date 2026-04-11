@@ -51,12 +51,54 @@ const isSameStudio = (s1, s2) => {
   return norm(s1) === norm(s2);
 };
 
+const inferStudioFromBookingId = (bookingId) => {
+  if (!bookingId) return "Monserrat";
+  const parts = bookingId.split("-");
+  if (parts.length <= 5) return "Monserrat";
+  const studioSlug = parts.slice(5).join(" ");
+  if (isSameStudio(studioSlug, "José Marmol")) return "José Marmol";
+  if (isSameStudio(studioSlug, "Monserrat")) return "Monserrat";
+  return studioSlug || "Monserrat";
+};
+
+const encodeBookingCloudMeta = (serviceName, studio, name) => JSON.stringify({
+  service: serviceName || null,
+  studio: studio || "Monserrat",
+  name: name || "-"
+});
+
+const decodeBookingCloudMeta = (serviceValue, bookingId) => {
+  const fallback = {
+    service: null,
+    studio: inferStudioFromBookingId(bookingId),
+    name: "-"
+  };
+
+  if (!serviceValue || typeof serviceValue !== "string") return fallback;
+
+  try {
+    const parsed = JSON.parse(serviceValue);
+    return {
+      service: parsed.service || null,
+      studio: parsed.studio || fallback.studio,
+      name: parsed.name || "-"
+    };
+  } catch (e) {
+    return {
+      service: serviceValue,
+      studio: fallback.studio,
+      name: "-"
+    };
+  }
+};
+
 // --- Configuración de Base de Datos (Supabase) ---
 const CLOUD_URL = "https://hugbaugzsntojbotjblz.supabase.co"; 
 const CLOUD_KEY = "sb_publishable_kBQ4L0lrcxnQNIasDakhBw_tmhkeNJs"; 
 
 let SUPABASE_URL = localStorage.getItem("miri_supabase_url") || CLOUD_URL;
 let SUPABASE_KEY = localStorage.getItem("miri_supabase_key") || CLOUD_KEY;
+let cloudSyncIntervalId = null;
 
 // Solo habilitamos la nube si la llave existe
 const isCloudEnabled = () => SUPABASE_URL !== "" && SUPABASE_KEY !== "";
@@ -156,6 +198,15 @@ const loadInitialData = async () => {
       if (!localStorage.getItem("miri_mp_link")) {
         localStorage.setItem("miri_mp_link", data.config.mp);
         MERCADO_PAGO_LINK = data.config.mp;
+      }
+      // La config del JSON actúa como fuente central para todos los dispositivos
+      if (data.config.supabase_url) {
+        localStorage.setItem("miri_supabase_url", data.config.supabase_url);
+        SUPABASE_URL = data.config.supabase_url;
+      }
+      if (data.config.supabase_key) {
+        localStorage.setItem("miri_supabase_key", data.config.supabase_key);
+        SUPABASE_KEY = data.config.supabase_key;
       }
     }
 
@@ -402,7 +453,12 @@ const injectAdminUI = () => {
   };
   document.getElementById("adminDownloadChanges").onclick = () => {
     const data = { 
-      config: { wa: WHATSAPP_NUMBER, mp: MERCADO_PAGO_LINK }, 
+      config: { 
+        wa: WHATSAPP_NUMBER, 
+        mp: MERCADO_PAGO_LINK,
+        supabase_url: SUPABASE_URL,
+        supabase_key: SUPABASE_KEY
+      }, 
       bookings: JSON.parse(localStorage.getItem("bookedSlots") || "{}"), 
       schedule: {
         slots: WORK_SLOTS,
@@ -698,6 +754,8 @@ if(currentPage === "reservar") {
   document.getElementById("confirmBooking").onclick = async () => {
     const nameInput = document.getElementById("clientName");
     const name = nameInput.value.trim();
+    const urlParams = new URLSearchParams(window.location.search);
+    const selectedService = urlParams.get('servicio') || "extensiones de pestañas";
     
     // Validación de formulario
     if (!name) {
@@ -739,7 +797,7 @@ if(currentPage === "reservar") {
     btn.textContent = "Procesando...";
 
     // 1. Guardado Local
-    b[dStr].push({time: selT, studio: selStudio, name: name}); 
+    b[dStr].push({time: selT, studio: selStudio, name: name, service: selectedService}); 
     localStorage.setItem("bookedSlots", JSON.stringify(b)); 
     if (window.__miriRenderCal) window.__miriRenderCal();
 
@@ -749,27 +807,24 @@ if(currentPage === "reservar") {
       const normD = normalizeDateStr(dStr);
       const safeId = `${normD}-${selT}-${selStudio}`.replace(/[\/\s:]/g, "-").normalize("NFD").replace(/[\u0300-\u036f]/g, "");
       
-      const success = await cloudUpsert("bookings", {id: safeId, date: normD, time: selT, studio: selStudio, name: name});
+      const success = await cloudUpsert("bookings", {
+        id: safeId,
+        date: normD,
+        time: selT,
+        service: encodeBookingCloudMeta(selectedService, selStudio, name)
+      });
       
       if (!success) {
-        btn.disabled = false;
-        btn.textContent = oldText;
-        const proceed = confirm("No pudimos sincronizar tu turno globalmente. ¿Deseas continuar con el pago? (Tendrás que avisarle a Miri)");
-        if (!proceed) {
-          const currentBookings = JSON.parse(localStorage.getItem("bookedSlots") || "{}");
-          if (currentBookings[normD]) {
-            currentBookings[normD] = currentBookings[normD].filter(b => !(b.time === selT && isSameStudio(b.studio, selStudio)));
-            localStorage.setItem("bookedSlots", JSON.stringify(currentBookings));
-          }
-          if (window.__miriRenderCal) window.__miriRenderCal();
-          return;
+        // Silencioso para clientes: solo notificamos si estamos en modo admin (MiriAdmin abierta)
+        const isAdminPanelOpen = adminOverlay && adminOverlay.style.display === "flex";
+        if (isAdminPanelOpen) {
+          alert("Error de sincronización con la nube (Supabase). El turno se guardó localmente pero no en la base de datos central.");
         }
+        // No bloqueamos al cliente, procedemos al pago de todas formas (el turno ya está en el localBookings)
       }
     }
 
     // --- Flujo de Redirección ---
-    const urlParams = new URLSearchParams(window.location.search);
-    const selectedService = urlParams.get('servicio') || "extensiones de pestañas";
     const waText = encodeURIComponent(`Hola! Quiero confirmar mi turno para ${selectedService} en ${selStudio}: ${dStr} a las ${selT} a nombre de ${name}. Ya realicé el pago de la seña.`);
     const waUrl = `https://wa.me/${WHATSAPP_NUMBER}?text=${waText}`;
 
@@ -915,8 +970,18 @@ const applySavedChanges = () => {
   if (d.texts) Object.keys(d.texts).forEach(p => { 
     const el = document.querySelector(p); 
     
-    // NO sobrescribir elementos críticos que contienen indicadores visuales (dots)
-    if (el && (el.classList.contains('studio-button') || el.closest('.studio-selector') || el.classList.contains('calendar-day'))) {
+    // NO sobrescribir elementos dinámicos críticos
+    if (el && (
+      el.id === 'selectedDateText' || 
+      el.id === 'summaryDate' || 
+      el.id === 'summaryTime' || 
+      el.id === 'currentMonth' ||
+      el.id === 'clientName' ||
+      el.closest('.booking-summary') ||
+      el.classList.contains('studio-button') || 
+      el.closest('.studio-selector') || 
+      el.classList.contains('calendar-day')
+    )) {
       if (!isEditing) return;
     }
 
@@ -959,8 +1024,14 @@ const syncWithCloud = (manual = false) => {
         
         d.forEach(b => { 
           const normalizedDate = normalizeDateStr(b.date);
+          const cloudMeta = decodeBookingCloudMeta(b.service, b.id);
           if(!cloudBookings[normalizedDate]) cloudBookings[normalizedDate]=[]; 
-          cloudBookings[normalizedDate].push({time: b.time, studio: b.studio || "Monserrat", name: b.name || "-"}); 
+          cloudBookings[normalizedDate].push({
+            time: b.time,
+            studio: cloudMeta.studio,
+            name: cloudMeta.name,
+            service: cloudMeta.service
+          }); 
         }); 
 
         // MEZCLA INTELIGENTE: Combinamos todo y guardamos de nuevo
@@ -995,6 +1066,11 @@ const syncWithCloud = (manual = false) => {
         if (localAdded > 0) console.log(`Se mantuvieron ${localAdded} turnos locales no presentes en la nube.`);
         localStorage.setItem("bookedSlots", JSON.stringify(mergedBookings)); 
         if(currentPage==="reservar" && window.__miriRenderCal) window.__miriRenderCal(); 
+        
+        // Si el panel de admin está abierto, refrescar su tabla
+        if (adminOverlay && adminOverlay.style.display === "flex") {
+          renderAdminBookings();
+        }
       } 
     });
     cloudFetch("config").then(d => { 
@@ -1038,6 +1114,12 @@ const syncWithCloud = (manual = false) => {
   } else if(manual) {
     alert("La nube no está configurada.");
   }
+};
+
+const startCloudSyncPolling = () => {
+  if (currentPage !== "reservar" || !isCloudEnabled() || cloudSyncIntervalId) return;
+  // Sincronización rápida para reflejar reservas hechas en otros dispositivos
+  cloudSyncIntervalId = setInterval(() => syncWithCloud(false), 5000);
 };
 
 const renderAdminBookings = () => {
@@ -1087,7 +1169,7 @@ window.releaseSlot = (d, t, s) => {
   }
 };
 
-document.addEventListener('DOMContentLoaded', () => { 
+document.addEventListener('DOMContentLoaded', async () => { 
   // --- Lógica del Menú Mobile ---
   const menuToggle = document.querySelector('.menu-toggle');
   const nav = document.querySelector('.header'); // Usamos el header para el estado nav-active
@@ -1111,19 +1193,16 @@ document.addEventListener('DOMContentLoaded', () => {
   document.querySelectorAll('[contenteditable]').forEach(el => el.contentEditable = "false");
   
   applySavedChanges(); 
+  await loadInitialData();
   syncWithCloud(); 
-  loadInitialData(); 
+  startCloudSyncPolling();
   
   // Refrescar cuando el usuario vuelve a la pestaña (botón atrás o cambiar de app)
    window.addEventListener('pageshow', (event) => {
      if (currentPage === "reservar") {
        if (window.__miriRenderCal) window.__miriRenderCal();
        syncWithCloud();
+       startCloudSyncPolling();
      }
    });
-
-  if(currentPage === "reservar" && isCloudEnabled()) {
-    // Sincronización rápida cada 5 segundos para que los turnos aparezcan casi al instante en otros dispositivos
-    setInterval(() => syncWithCloud(false), 5000);
-  }
 });
