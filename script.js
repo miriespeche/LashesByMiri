@@ -469,13 +469,17 @@ const openAdminPanel = () => {
   document.getElementById("adminMpLink").value = MERCADO_PAGO_LINK;
   
   const currentWorkStudio = document.getElementById("adminWorkSlotStudio").value;
-  document.getElementById("adminWorkSlots").value = WORK_SLOTS[currentWorkStudio].join(", ");
+  document.getElementById("adminWorkSlots").value = (WORK_SLOTS[currentWorkStudio] || []).join(", ");
   
   if(isCloudEnabled()) {
     document.getElementById("adminSupabaseUrl").value = SUPABASE_URL;
     document.getElementById("adminSupabaseKey").value = SUPABASE_KEY;
   }
-  renderAdminBookings();
+  
+  // Sincronizar antes de mostrar la tabla para ver los turnos más recientes
+  syncWithCloud().then(() => {
+    renderAdminBookings();
+  });
 };
 
 let adminTimer = null;
@@ -691,8 +695,16 @@ if(currentPage === "reservar") {
       if (window.__miriRenderCal) window.__miriRenderCal();
 
       if(isCloudEnabled()) {
-        // Enviar a la nube. Si falla, el cliente igual verá el bloqueo local.
-        cloudUpsert("bookings", {id:`${dStr}-${selT}-${selStudio}`, date:dStr, time:selT, studio:selStudio, name: name});
+        // BLOQUEO CRÍTICO: Esperamos a que la nube confirme el guardado antes de irnos de la página
+        // Esto asegura que el turno se bloquee para TODOS los dispositivos.
+        try {
+          const success = await cloudUpsert("bookings", {id:`${dStr}-${selT}-${selStudio}`, date:dStr, time:selT, studio:selStudio, name: name});
+          if (!success) {
+            console.warn("Fallo el guardado en la nube, pero se guardó localmente.");
+          }
+        } catch (e) {
+          console.error("Error bloqueando turno en la nube:", e);
+        }
       }
     }
 
@@ -972,18 +984,32 @@ const syncWithCloud = (manual = false) => {
 
 const renderAdminBookings = () => {
   const t = document.getElementById("adminBookingsTable"); if(!t) return;
-  const b = JSON.parse(localStorage.getItem("bookedSlots") || "{}"); t.innerHTML = "";
-  Object.keys(b).forEach(d => b[d].forEach(booking => { 
-    const r = t.insertRow(); 
+  // Limpiar tabla pero mantener el encabezado si lo hay
+  t.innerHTML = `<tr><th>Fecha</th><th>Hora</th><th>Estudio</th><th>Cliente</th><th>Acción</th></tr>`;
+  const b = JSON.parse(localStorage.getItem("bookedSlots") || "{}"); 
+  
+  // Ordenar fechas para que las más recientes aparezcan arriba
+  const sortedDates = Object.keys(b).sort((a, b) => {
+    const [da, ma, ya] = a.split("/").map(Number);
+    const [db, mb, yb] = b.split("/").map(Number);
+    return new Date(yb, mb-1, db) - new Date(ya, ma-1, da);
+  });
+
+  sortedDates.forEach(d => {
+    // Filtrar turnos vacíos o mal formados
+    const dayBookings = (b[d] || []).filter(item => item !== null && item !== undefined);
     
-    // Soporte para formato antiguo (string) y nuevo (objeto)
-    const time = typeof booking === 'object' ? booking.time : booking;
-    const studio = typeof booking === 'object' ? (booking.studio || "Monserrat") : "Monserrat";
-    const clientName = typeof booking === 'object' ? (booking.name || "-") : "-";
-    
-    const studioClass = isSameStudio(studio, "Monserrat") ? "monserrat" : "jose-marmol";
-    r.innerHTML = `<td>${d}</td><td>${time}</td><td><span class="studio-tag ${studioClass}">${studio}</span></td><td>${clientName}</td><td><button onclick="releaseSlot('${d}','${time}','${studio}')">Liberar</button></td>`; 
-  }));
+    dayBookings.forEach(booking => { 
+      const r = t.insertRow(); 
+      
+      const time = typeof booking === 'object' ? booking.time : booking;
+      const studio = typeof booking === 'object' ? (booking.studio || "Monserrat") : "Monserrat";
+      const clientName = typeof booking === 'object' ? (booking.name || "-") : "-";
+      
+      const studioClass = isSameStudio(studio, "Monserrat") ? "monserrat" : "jose-marmol";
+      r.innerHTML = `<td>${d}</td><td>${time}</td><td><span class="studio-tag ${studioClass}">${studio}</span></td><td>${clientName}</td><td><button onclick="releaseSlot('${d}','${time}','${studio}')">Liberar</button></td>`; 
+    });
+  });
 };
 
 window.releaseSlot = (d, t, s) => {
@@ -1036,6 +1062,7 @@ document.addEventListener('DOMContentLoaded', () => {
    });
 
   if(currentPage === "reservar" && isCloudEnabled()) {
-    setInterval(() => syncWithCloud(false), 20000);
+    // Sincronización rápida cada 5 segundos para que los turnos aparezcan casi al instante en otros dispositivos
+    setInterval(() => syncWithCloud(false), 5000);
   }
 });
