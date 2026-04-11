@@ -1,7 +1,9 @@
 {
   "config": {
     "wa": "5491144123280",
-    "mp": "https://mpago.la/1iJbsQy"
+    "mp": "https://mpago.la/1iJbsQy",
+    "supabase_url": "https://hugbaugzsntojbotjblz.supabase.co",
+    "supabase_key": "sb_publishable_kBQ4L0lrcxnQNIasDakhBw_tmhkeNJs"
   },
   "bookings": {
     "1/4/2026": [

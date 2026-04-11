@@ -92,6 +92,32 @@ const decodeBookingCloudMeta = (serviceValue, bookingId) => {
   }
 };
 
+const getBookingCloudId = (dateStr, time, studio) =>
+  `${normalizeDateStr(dateStr)}-${time}-${studio}`.replace(/[\/\s:]/g, "-").normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+
+const loadPendingCloudBookings = () => {
+  try {
+    return JSON.parse(localStorage.getItem("miri_pending_cloud_bookings") || "[]");
+  } catch (e) {
+    return [];
+  }
+};
+
+const savePendingCloudBookings = (items) => {
+  localStorage.setItem("miri_pending_cloud_bookings", JSON.stringify(items));
+};
+
+const upsertPendingCloudBooking = (booking) => {
+  const items = loadPendingCloudBookings().filter(item => item.id !== booking.id);
+  items.push(booking);
+  savePendingCloudBookings(items);
+};
+
+const removePendingCloudBooking = (bookingId) => {
+  const items = loadPendingCloudBookings().filter(item => item.id !== bookingId);
+  savePendingCloudBookings(items);
+};
+
 // --- Configuración de Base de Datos (Supabase) ---
 const CLOUD_URL = "https://hugbaugzsntojbotjblz.supabase.co"; 
 const CLOUD_KEY = "sb_publishable_kBQ4L0lrcxnQNIasDakhBw_tmhkeNJs"; 
@@ -805,7 +831,15 @@ if(currentPage === "reservar") {
     if(isCloudEnabled()) {
       // Normalizamos el ID para que sea idéntico en todos los dispositivos
       const normD = normalizeDateStr(dStr);
-      const safeId = `${normD}-${selT}-${selStudio}`.replace(/[\/\s:]/g, "-").normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+      const safeId = getBookingCloudId(normD, selT, selStudio);
+      upsertPendingCloudBooking({
+        id: safeId,
+        date: normD,
+        time: selT,
+        studio: selStudio,
+        name: name,
+        service: selectedService
+      });
       
       const success = await cloudUpsert("bookings", {
         id: safeId,
@@ -821,6 +855,8 @@ if(currentPage === "reservar") {
           alert("Error de sincronización con la nube (Supabase). El turno se guardó localmente pero no en la base de datos central.");
         }
         // No bloqueamos al cliente, procedemos al pago de todas formas (el turno ya está en el localBookings)
+      } else {
+        removePendingCloudBooking(safeId);
       }
     }
 
@@ -977,7 +1013,8 @@ const applySavedChanges = () => {
       el.id === 'summaryTime' || 
       el.id === 'currentMonth' ||
       el.id === 'clientName' ||
-      el.closest('.booking-summary') ||
+      el.closest('#slotsContainer') ||
+      el.closest('#bookingSummary') ||
       el.classList.contains('studio-button') || 
       el.closest('.studio-selector') || 
       el.classList.contains('calendar-day')
@@ -1019,7 +1056,7 @@ const syncWithCloud = (manual = false) => {
     cloudFetch("bookings").then(d => { 
       if(d) { 
         console.log(`Sincronizando ${d.length} turnos desde la nube...`);
-        const localBookings = JSON.parse(localStorage.getItem("bookedSlots") || "{}");
+        const pendingCloudBookings = loadPendingCloudBookings();
         const cloudBookings = {}; 
         
         d.forEach(b => { 
@@ -1034,36 +1071,24 @@ const syncWithCloud = (manual = false) => {
           }); 
         }); 
 
-        // MEZCLA INTELIGENTE: Combinamos todo y guardamos de nuevo
-        const mergedBookings = { ...cloudBookings }; // Empezamos con lo que hay en la nube
-        
-        // Añadimos lo local que no esté en la nube todavía (por si el usuario acaba de reservar)
-        let localAdded = 0;
-        Object.keys(localBookings).forEach(date => {
-          const normLocalDate = normalizeDateStr(date);
-          if (!mergedBookings[normLocalDate]) {
-            mergedBookings[normLocalDate] = localBookings[date];
-            localAdded += localBookings[date].length;
-          } else {
-            localBookings[date].forEach(localB => {
-              const lTime = typeof localB === 'string' ? localB : localB.time;
-              const lStudio = typeof localB === 'string' ? "Monserrat" : (localB.studio || "Monserrat");
-              
-              const alreadyInMerged = mergedBookings[normLocalDate].some(mB => {
-                const mTime = typeof mB === 'string' ? mB : mB.time;
-                const mStudio = typeof mB === 'string' ? "Monserrat" : (mB.studio || "Monserrat");
-                return mTime === lTime && isSameStudio(mStudio, lStudio);
-              });
-              
-              if (!alreadyInMerged) {
-                mergedBookings[normLocalDate].push(localB);
-                localAdded++;
-              }
+        // La nube es la fuente principal; solo mantenemos pendientes locales que aún no sincronizaron
+        const mergedBookings = { ...cloudBookings };
+        pendingCloudBookings.forEach(pending => {
+          const pendingDate = normalizeDateStr(pending.date);
+          if (!mergedBookings[pendingDate]) mergedBookings[pendingDate] = [];
+          const alreadyInMerged = mergedBookings[pendingDate].some(item =>
+            item.time === pending.time && isSameStudio(item.studio, pending.studio)
+          );
+          if (!alreadyInMerged) {
+            mergedBookings[pendingDate].push({
+              time: pending.time,
+              studio: pending.studio,
+              name: pending.name || "-",
+              service: pending.service || null
             });
           }
         });
 
-        if (localAdded > 0) console.log(`Se mantuvieron ${localAdded} turnos locales no presentes en la nube.`);
         localStorage.setItem("bookedSlots", JSON.stringify(mergedBookings)); 
         if(currentPage==="reservar" && window.__miriRenderCal) window.__miriRenderCal(); 
         
@@ -1161,8 +1186,9 @@ window.releaseSlot = (d, t, s) => {
       return !(bTime === t && isSameStudio(bStudio, s));
     }); 
     localStorage.setItem("bookedSlots", JSON.stringify(b));
+    removePendingCloudBooking(getBookingCloudId(d, t, s));
     if(isCloudEnabled()) {
-      const safeId = `${d}-${t}-${s}`.replace(/[\/\s:]/g, "-").normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+      const safeId = getBookingCloudId(d, t, s);
       cloudDelete("bookings", safeId);
     }
     renderAdminBookings();
