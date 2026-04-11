@@ -31,7 +31,7 @@ const normalizeDateStr = (dateStr) => {
   }
   // Caso 2: Formato ISO yyyy-mm-dd (que suele devolver Supabase si la columna es tipo DATE)
   if (dateStr.includes("-")) {
-    const parts = dateStr.split("-");
+    const parts = dateStr.split("T")[0].split("-"); // Limpiamos la T si existe
     if (parts.length === 3 && parts[0].length === 4) {
       return `${parseInt(parts[2])}/${parseInt(parts[1])}/${parts[0]}`;
     }
@@ -85,6 +85,7 @@ const cloudUpsert = async (table, data) => {
       console.error("Error en cloudUpsert:", err);
       return false;
     }
+    console.log(`Guardado exitoso en la nube (${table})`);
     return true;
   } catch (e) { 
     console.error("Error de conexión en cloudUpsert:", e);
@@ -157,22 +158,32 @@ const loadInitialData = async () => {
 
     // Aplicar turnos desde el JSON (si el usuario los subió a mano)
     if (data.bookings) {
+      // Usamos una función de mezcla única para evitar duplicados y race conditions
       const localBookings = JSON.parse(localStorage.getItem("bookedSlots") || "{}");
-      // Mezclar turnos del JSON con los locales (sin duplicados)
+      let changed = false;
+      
       Object.keys(data.bookings).forEach(date => {
-        if (!localBookings[date]) localBookings[date] = [];
+        const normDate = normalizeDateStr(date);
+        if (!localBookings[normDate]) localBookings[normDate] = [];
+        
         data.bookings[date].forEach(b => {
           const time = typeof b === 'string' ? b : b.time;
           const studio = typeof b === 'string' ? "Monserrat" : (b.studio || "Monserrat");
-          const exists = localBookings[date].some(lb => {
+          const exists = localBookings[normDate].some(lb => {
             const lTime = typeof lb === 'string' ? lb : lb.time;
             const lStudio = typeof lb === 'string' ? "Monserrat" : (lb.studio || "Monserrat");
             return lTime === time && isSameStudio(lStudio, studio);
           });
-          if (!exists) localBookings[date].push(b);
+          if (!exists) {
+            localBookings[normDate].push(b);
+            changed = true;
+          }
         });
       });
-      localStorage.setItem("bookedSlots", JSON.stringify(localBookings));
+      if (changed) {
+        localStorage.setItem("bookedSlots", JSON.stringify(localBookings));
+        console.log("Turnos del JSON mezclados con éxito.");
+      }
     }
 
     // Aplicar cambios visuales
@@ -913,6 +924,7 @@ const syncWithCloud = (manual = false) => {
   if(isCloudEnabled()) {
     cloudFetch("bookings").then(d => { 
       if(d) { 
+        console.log(`Sincronizando ${d.length} turnos desde la nube...`);
         const localBookings = JSON.parse(localStorage.getItem("bookedSlots") || "{}");
         const cloudBookings = {}; 
         
@@ -926,10 +938,12 @@ const syncWithCloud = (manual = false) => {
         const mergedBookings = { ...cloudBookings }; // Empezamos con lo que hay en la nube
         
         // Añadimos lo local que no esté en la nube todavía (por si el usuario acaba de reservar)
+        let localAdded = 0;
         Object.keys(localBookings).forEach(date => {
           const normLocalDate = normalizeDateStr(date);
           if (!mergedBookings[normLocalDate]) {
             mergedBookings[normLocalDate] = localBookings[date];
+            localAdded += localBookings[date].length;
           } else {
             localBookings[date].forEach(localB => {
               const lTime = typeof localB === 'string' ? localB : localB.time;
@@ -943,11 +957,13 @@ const syncWithCloud = (manual = false) => {
               
               if (!alreadyInMerged) {
                 mergedBookings[normLocalDate].push(localB);
+                localAdded++;
               }
             });
           }
         });
 
+        if (localAdded > 0) console.log(`Se mantuvieron ${localAdded} turnos locales no presentes en la nube.`);
         localStorage.setItem("bookedSlots", JSON.stringify(mergedBookings)); 
         if(currentPage==="reservar" && window.__miriRenderCal) window.__miriRenderCal(); 
       } 
