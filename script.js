@@ -691,20 +691,41 @@ if(currentPage === "reservar") {
       if (window.__miriRenderCal) window.__miriRenderCal();
 
       if(isCloudEnabled()) {
-        // ... (el resto del código de cloud sync) ...
-        const success = await cloudUpsert("bookings", {id:`${dStr}-${selT}-${selStudio}`, date:dStr, time:selT, studio:selStudio, name: name});
-        if (!success) {
-          console.warn("Fallo el guardado en la nube, pero se guardó localmente.");
-        }
+        // Enviar a la nube. Si falla, el cliente igual verá el bloqueo local.
+        cloudUpsert("bookings", {id:`${dStr}-${selT}-${selStudio}`, date:dStr, time:selT, studio:selStudio, name: name});
       }
     }
-    window.open(MERCADO_PAGO_LINK, "_blank");
+
+    // --- Flujo de Redirección ---
     const urlParams = new URLSearchParams(window.location.search);
     const selectedService = urlParams.get('servicio') || "extensiones de pestañas";
-    setTimeout(() => { window.location.href = `https://wa.me/${WHATSAPP_NUMBER}?text=${encodeURIComponent("Confirmar turno para " + selectedService + " en "+selStudio+": "+dStr+" "+selT+" a nombre de "+name)}`; }, 1000);
+    const waText = encodeURIComponent(`Hola! Quiero confirmar mi turno para ${selectedService} en ${selStudio}: ${dStr} a las ${selT} a nombre de ${name}. Ya realicé el pago de la seña.`);
+    const waUrl = `https://wa.me/${WHATSAPP_NUMBER}?text=${waText}`;
+
+    // 1. Abrimos Mercado Pago en la misma pestaña para asegurar que el usuario pague
+    // 2. Usamos el historial del navegador para que cuando el usuario pague y vuelva (o cierre), 
+    //    sea redirigido a WhatsApp si ya completó el proceso.
+    
+    // Guardamos en sessionStorage que hay una redirección pendiente a WhatsApp
+    sessionStorage.setItem("pendingWA", waUrl);
+    
+    // Redirigir a Mercado Pago
+    window.location.href = MERCADO_PAGO_LINK;
   };
   renderCal();
 }
+
+// Lógica para detectar si volvemos de Mercado Pago y disparar WhatsApp
+window.addEventListener('load', () => {
+  const pendingWA = sessionStorage.getItem("pendingWA");
+  if (pendingWA) {
+    sessionStorage.removeItem("pendingWA");
+    // Pequeño delay para que la página cargue y el usuario entienda qué pasa
+    setTimeout(() => {
+      window.location.href = pendingWA;
+    }, 1500);
+  }
+});
 
 // --- Edición y Sincronización ---
 const enableVisualEditing = () => {
@@ -877,21 +898,26 @@ const syncWithCloud = (manual = false) => {
           cloudBookings[normalizedDate].push({time: b.time, studio: b.studio || "Monserrat", name: b.name || "-"}); 
         }); 
 
-        // Mezclamos los datos
-        const mergedBookings = { ...localBookings };
+        // MEZCLA INTELIGENTE: Combinamos todo y guardamos de nuevo
+        const mergedBookings = { ...cloudBookings }; // Empezamos con lo que hay en la nube
         
-        Object.keys(cloudBookings).forEach(date => {
+        // Añadimos lo local que no esté en la nube todavía (por si el usuario acaba de reservar)
+        Object.keys(localBookings).forEach(date => {
           if (!mergedBookings[date]) {
-            mergedBookings[date] = cloudBookings[date];
+            mergedBookings[date] = localBookings[date];
           } else {
-            cloudBookings[date].forEach(cloudB => {
-              const exists = mergedBookings[date].some(localB => {
-                const lTime = typeof localB === 'string' ? localB : localB.time;
-                const lStudio = typeof localB === 'string' ? "Monserrat" : (localB.studio || "Monserrat");
-                return lTime === cloudB.time && isSameStudio(lStudio, cloudB.studio);
+            localBookings[date].forEach(localB => {
+              const lTime = typeof localB === 'string' ? localB : localB.time;
+              const lStudio = typeof localB === 'string' ? "Monserrat" : (localB.studio || "Monserrat");
+              
+              const alreadyInMerged = mergedBookings[date].some(mB => {
+                const mTime = typeof mB === 'string' ? mB : mB.time;
+                const mStudio = typeof mB === 'string' ? "Monserrat" : (mB.studio || "Monserrat");
+                return mTime === lTime && isSameStudio(mStudio, lStudio);
               });
-              if (!exists) {
-                mergedBookings[date].push(cloudB);
+              
+              if (!alreadyInMerged) {
+                mergedBookings[date].push(localB);
               }
             });
           }
