@@ -5,7 +5,120 @@
     "supabase_url": "https://hugbaugzsntojbotjblz.supabase.co",
     "supabase_key": "sb_publishable_kBQ4L0lrcxnQNIasDakhBw_tmhkeNJs"
   },
-  "bookings": {},
+  "bookings": {
+    "1/4/2026": [
+      {
+        "time": "09:00",
+        "studio": "Monserrat",
+        "name": "-",
+        "service": null
+      },
+      {
+        "time": "10:00",
+        "studio": "Monserrat",
+        "name": "-",
+        "service": null
+      }
+    ],
+    "14/4/2026": [
+      {
+        "time": "15:00",
+        "studio": "Monserrat",
+        "name": "Milagros Cerra",
+        "service": "extensiones de pestañas"
+      }
+    ],
+    "17/4/2026": [
+      {
+        "time": "17:00",
+        "studio": "José Marmol",
+        "name": "Uma forzisi",
+        "service": "extensiones de pestañas"
+      },
+      {
+        "time": "14:00",
+        "studio": "Monserrat",
+        "name": "Natasha Jodara",
+        "service": "extensiones de pestañas"
+      },
+      {
+        "time": "18:00",
+        "studio": "Monserrat",
+        "name": "mirsnda",
+        "service": "Perfilado cejas"
+      },
+      {
+        "time": "11:00",
+        "studio": "Monserrat",
+        "name": "mirsnda",
+        "service": "Perfilado cejas"
+      }
+    ],
+    "16/4/2026": [
+      {
+        "time": "15:00",
+        "studio": "Monserrat",
+        "name": "Gema Barcia",
+        "service": "Volumen 3D"
+      }
+    ],
+    "21/4/2026": [
+      {
+        "time": "11:00",
+        "studio": "Monserrat",
+        "name": "iara gessica estefania gomez esnal",
+        "service": "extensiones de pestañas"
+      },
+      {
+        "time": "15:00",
+        "studio": "Monserrat",
+        "name": "Macarena Maturano",
+        "service": "Laminado cejas"
+      },
+      {
+        "time": "13:00",
+        "studio": "Monserrat",
+        "name": "miri",
+        "service": "extensiones de pestañas"
+      }
+    ],
+    "23/4/2026": [
+      {
+        "time": "11:00",
+        "studio": "Monserrat",
+        "name": "milena",
+        "service": "extensiones de pestañas"
+      },
+      {
+        "time": "18:00",
+        "studio": "Monserrat",
+        "name": "Lourdes Mendoza",
+        "service": "Lash lifting"
+      }
+    ],
+    "25/4/2026": [
+      {
+        "time": "18:00",
+        "studio": "Monserrat",
+        "name": "milena",
+        "service": "extensiones de pestañas"
+      },
+      {
+        "time": "11:00",
+        "studio": "Monserrat",
+        "name": "miri",
+        "service": "extensiones de pestañas"
+      }
+    ],
+    "22/4/2026": [
+      {
+        "time": "11:00",
+        "studio": "Monserrat",
+        "name": "Ayelen Mol",
+        "service": "extensiones de pestañas"
+      }
+    ]
+  },
   "schedule": {
     "slots": {
       "Monserrat": [
@@ -15,11 +128,7 @@
         "18:00"
       ],
       "José Marmol": [
-        "10:00",
-        "11:00",
-        "14:00",
-        "16:00",
-        "17:00"
+        "Sin horarios"
       ]
     },
     "custom_days": {
@@ -140,7 +249,8 @@
           "11:00"
         ],
         "José Marmol": [
-          "Sin horarios"
+          "10:00",
+          "11:00"
         ]
       },
       "10/6/2026": {
@@ -157,7 +267,9 @@
       },
       "11/4/2026": {
         "Monserrat": [
-          "11:00"
+          "11:00",
+          "12:00",
+          "13:00"
         ],
         "José Marmol": [
           "Sin horarios"
@@ -194,9 +306,7 @@
       },
       "13/4/2026": {
         "Monserrat": [
-          "13:00",
-          "15:00",
-          "17:00"
+          "Sin horarios"
         ],
         "José Marmol": [
           "Sin horarios"
@@ -216,14 +326,10 @@
       },
       "14/4/2026": {
         "Monserrat": [
-          "11:00",
-          "13:00",
-          "15:00"
+          "Sin horarios"
         ],
         "José Marmol": [
-          "11:00",
-          "13:00",
-          "15:00"
+          "Sin horarios"
         ]
       },
       "14/5/2026": {
@@ -270,6 +376,14 @@
       },
       "16/4/2026": {
         "Monserrat": [
+          "15:00"
+        ],
+        "José Marmol": [
+          "Sin horarios"
+        ]
+      },
+      "17/4/2026": {
+        "José Marmol": [
           "Sin horarios"
         ]
       },
@@ -340,6 +454,11 @@
           "Sin horarios"
         ]
       },
+      "22/4/2026": {
+        "Monserrat": [
+          "15:00"
+        ]
+      },
       "22/5/2026": {
         "Monserrat": [
           "15:00",
@@ -348,6 +467,12 @@
         "José Marmol": [
           "15:00",
           "17:00"
+        ]
+      },
+      "23/4/2026": {
+        "Monserrat": [
+          "14:00",
+          "16:00"
         ]
       },
       "23/6/2026": {
@@ -384,6 +509,11 @@
           "11:00",
           "13:00",
           "15:00"
+        ]
+      },
+      "25/4/2026": {
+        "Monserrat": [
+          "16:00"
         ]
       },
       "25/5/2026": {

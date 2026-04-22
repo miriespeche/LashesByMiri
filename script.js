@@ -896,15 +896,30 @@ const checkPendingWA = () => {
     overlay.style = "position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(255,255,255,0.95);z-index:10000;display:flex;flex-direction:column;align-items:center;justify-content:center;font-family:sans-serif;text-align:center;padding:2rem;";
     overlay.innerHTML = `
       <div style="font-size:1.5rem;color:#d4af37;margin-bottom:1rem;font-weight:bold;">¡Turno Agendado!</div>
-      <p style="margin-bottom:1.5rem;color:#333;">Redirigiendo a WhatsApp para confirmar los detalles finales...</p>
-      <div class="loader-simple" style="width:40px;height:40px;border:4px solid #f3f3f3;border-top:4px solid #d4af37;border-radius:50%;animation:spin 1s linear infinite;"></div>
+      <p style="margin-bottom:1rem;color:#333;">Para confirmar los detalles finales, abrí WhatsApp.</p>
+      <button id="openWhatsAppBtn" class="button button-primary" style="min-height:44px; padding:0.8rem 1.2rem; margin-bottom:0.75rem;">Abrir WhatsApp</button>
+      <a href="${pendingWA}" target="_blank" rel="noopener noreferrer" style="color:#4a5568; text-decoration:underline; font-size:0.95rem;">Si no se abre, tocá acá</a>
+      <div class="loader-simple" aria-hidden="true" style="margin-top:1.25rem;width:40px;height:40px;border:4px solid #f3f3f3;border-top:4px solid #d4af37;border-radius:50%;animation:spin 1s linear infinite;"></div>
       <style>@keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }</style>
     `;
     document.body.appendChild(overlay);
 
+    const btn = overlay.querySelector("#openWhatsAppBtn");
+    if (btn) {
+      btn.addEventListener("click", () => {
+        // En click (gesto del usuario) los navegadores suelen permitir abrir WhatsApp sin bloquear.
+        window.location.href = pendingWA;
+      });
+    }
+
+    // Intento automático (puede fallar por políticas del navegador); el botón queda como fallback confiable.
     setTimeout(() => {
-      window.location.href = pendingWA;
-    }, 2000);
+      try {
+        window.location.href = pendingWA;
+      } catch (e) {
+        // No hacemos nada: el usuario tiene el botón/link visible.
+      }
+    }, 800);
   }
 };
 
