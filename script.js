@@ -870,7 +870,7 @@ if(currentPage === "reservar") {
     }
 
     // --- Flujo de Redirección ---
-    const waText = encodeURIComponent(`Hola! Quiero confirmar mi turno para ${selectedService} en ${selStudio}: ${dStr} a las ${selT} a nombre de ${name}. Aquí adjunto el comprobante de la transferencia.`);
+    const waText = encodeURIComponent(`¡Hola! 😀 Quiero confirmar mi turno para ${selectedService} en ${selStudio}: ${dStr} a las ${selT} a nombre de ${name}.\n\nPara confirmar el turno, es necesario realizar la transferencia de $10.000 para señar.\n\nMis datos para enviarla seña:\nAlias: mirandaespeche\nCVU: 0000003100053982193453\nNombre: Miranda Espeche\n\nAquí adjunto el comprobante.`);
     const waUrl = `https://wa.me/${WHATSAPP_NUMBER}?text=${waText}`;
 
     // Cambiar estado visual antes de la redirección
