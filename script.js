@@ -1,6 +1,7 @@
 let WHATSAPP_NUMBER = localStorage.getItem("miri_wa_number") || "5491144123280";
 const DEFAULT_MESSAGE = "Hola, quiero reservar un turno para extensiones de pestañas";
-let MERCADO_PAGO_LINK = localStorage.getItem("miri_mp_link") || "https://mpago.la/1iJbsQy";
+let BANK_ALIAS = localStorage.getItem("miri_mp_link") || "mirandaespeche";
+let BANK_NAME = "Miranda Espeche";
 
 // --- Estructura de Horarios (Soporte Multi-estudio) ---
 const DEFAULT_SLOTS = ["09:00", "10:00", "11:00", "12:00", "14:00", "15:00", "16:00", "17:00", "18:00"];
@@ -64,14 +65,16 @@ const inferStudioFromBookingId = (bookingId) => {
 const encodeBookingCloudMeta = (serviceName, studio, name) => JSON.stringify({
   service: serviceName || null,
   studio: studio || "Monserrat",
-  name: name || "-"
+  name: name || "-",
+  created_at: new Date().toISOString()
 });
 
 const decodeBookingCloudMeta = (serviceValue, bookingId) => {
   const fallback = {
     service: null,
     studio: inferStudioFromBookingId(bookingId),
-    name: "-"
+    name: "-",
+    created_at: null
   };
 
   if (!serviceValue || typeof serviceValue !== "string") return fallback;
@@ -81,13 +84,15 @@ const decodeBookingCloudMeta = (serviceValue, bookingId) => {
     return {
       service: parsed.service || null,
       studio: parsed.studio || fallback.studio,
-      name: parsed.name || "-"
+      name: parsed.name || "-",
+      created_at: parsed.created_at || null
     };
   } catch (e) {
     return {
       service: serviceValue,
       studio: fallback.studio,
-      name: "-"
+      name: "-",
+      created_at: null
     };
   }
 };
@@ -223,7 +228,7 @@ const loadInitialData = async () => {
       }
       if (!localStorage.getItem("miri_mp_link")) {
         localStorage.setItem("miri_mp_link", data.config.mp);
-        MERCADO_PAGO_LINK = data.config.mp;
+        BANK_ALIAS = data.config.mp;
       }
       // La config del JSON actúa como fuente central para todos los dispositivos
       if (data.config.supabase_url) {
@@ -337,7 +342,7 @@ const injectAdminUI = () => {
           <h3>General</h3>
           <div class="admin-grid">
             <div class="admin-field"><label>WhatsApp</label><input type="text" id="adminWaNumber"></div>
-            <div class="admin-field"><label>Link Pago</label><input type="text" id="adminMpLink"></div>
+            <div class="admin-field"><label>Alias Transferencia</label><input type="text" id="adminMpLink"></div>
           </div>
           <button class="button button-primary btn-save-all" id="adminSaveConfig">Guardar</button>
         </div>
@@ -385,7 +390,7 @@ const injectAdminUI = () => {
         </div>
         <div class="admin-section" id="adminSectionBookings">
           <h3>Turnos</h3>
-          <div class="admin-table-wrapper"><table class="admin-table"><thead><tr><th>Fecha</th><th>Hora</th><th>Estudio</th><th>Cliente</th><th>Acción</th></tr></thead><tbody id="adminBookingsTable"></tbody></table></div>
+          <div class="admin-table-wrapper"><table class="admin-table" id="adminBookingsTable"></table></div>
         </div>
       </div>
     </div>
@@ -409,7 +414,7 @@ const injectAdminUI = () => {
     const mp = document.getElementById("adminMpLink").value.trim();
     if(wa) localStorage.setItem("miri_wa_number", wa);
     if(mp) localStorage.setItem("miri_mp_link", mp);
-    if(isCloudEnabled()) cloudUpsert("config", {id:1, wa:wa||WHATSAPP_NUMBER, mp:mp||MERCADO_PAGO_LINK}).then(() => location.reload());
+    if(isCloudEnabled()) cloudUpsert("config", {id:1, wa:wa||WHATSAPP_NUMBER, mp:mp||BANK_ALIAS}).then(() => location.reload());
     else location.reload();
   };
   document.getElementById("adminSaveSlots").onclick = () => {
@@ -483,7 +488,7 @@ const injectAdminUI = () => {
     const data = { 
       config: { 
         wa: WHATSAPP_NUMBER, 
-        mp: MERCADO_PAGO_LINK,
+        mp: BANK_ALIAS,
         supabase_url: SUPABASE_URL,
         supabase_key: SUPABASE_KEY
       }, 
@@ -586,7 +591,7 @@ const openAdminPanel = () => {
   if(!adminOverlay) injectAdminUI();
   adminOverlay.style.display = "flex";
   document.getElementById("adminWaNumber").value = WHATSAPP_NUMBER;
-  document.getElementById("adminMpLink").value = MERCADO_PAGO_LINK;
+  document.getElementById("adminMpLink").value = BANK_ALIAS;
   
   const currentWorkStudio = document.getElementById("adminWorkSlotStudio").value;
   document.getElementById("adminWorkSlots").value = (WORK_SLOTS[currentWorkStudio] || []).join(", ");
@@ -825,7 +830,8 @@ if(currentPage === "reservar") {
     btn.textContent = "Procesando...";
 
     // 1. Guardado Local
-    b[dStr].push({time: selT, studio: selStudio, name: name, service: selectedService}); 
+    const createdAt = new Date().toISOString();
+    b[dStr].push({time: selT, studio: selStudio, name: name, service: selectedService, created_at: createdAt}); 
     localStorage.setItem("bookedSlots", JSON.stringify(b)); 
     if (window.__miriRenderCal) window.__miriRenderCal();
 
@@ -840,7 +846,8 @@ if(currentPage === "reservar") {
         time: selT,
         studio: selStudio,
         name: name,
-        service: selectedService
+        service: selectedService,
+        created_at: createdAt
       });
       
       const success = await cloudUpsert("bookings", {
@@ -862,24 +869,16 @@ if(currentPage === "reservar") {
       }
     }
 
-    // --- Flujo de Redirección Mejorado ---
-    const waText = encodeURIComponent(`Hola! Quiero confirmar mi turno para ${selectedService} en ${selStudio}: ${dStr} a las ${selT} a nombre de ${name}. Ya realicé el pago de la seña.`);
+    // --- Flujo de Redirección ---
+    const waText = encodeURIComponent(`Hola! Quiero confirmar mi turno para ${selectedService} en ${selStudio}: ${dStr} a las ${selT} a nombre de ${name}. Aquí adjunto el comprobante de la transferencia.`);
     const waUrl = `https://wa.me/${WHATSAPP_NUMBER}?text=${waText}`;
 
-    // Guardamos en sessionStorage para cuando el usuario regrese de Mercado Pago
-    sessionStorage.setItem("pendingWA", waUrl);
-    
     // Cambiar estado visual antes de la redirección
-    btn.textContent = "¡Listo! Redirigiendo...";
+    btn.textContent = "¡Listo! Abriendo WhatsApp...";
     
-    // Pequeño delay para asegurar que el guardado y el storage se procesen
+    // Pequeño delay para asegurar que el guardado se procese
     setTimeout(() => {
-      if (MERCADO_PAGO_LINK) {
-        window.location.href = MERCADO_PAGO_LINK;
-      } else {
-        alert("Error: Link de pago no configurado. Por favor, contactanos por WhatsApp.");
-        window.location.href = waUrl;
-      }
+      window.location.href = waUrl;
     }, 600);
   };
   renderCal();
@@ -1115,7 +1114,8 @@ const syncWithCloud = (manual = false) => {
             time: b.time,
             studio: cloudMeta.studio,
             name: cloudMeta.name,
-            service: cloudMeta.service
+            service: cloudMeta.service,
+            created_at: cloudMeta.created_at
           }); 
         }); 
 
@@ -1132,7 +1132,8 @@ const syncWithCloud = (manual = false) => {
               time: pending.time,
               studio: pending.studio,
               name: pending.name || "-",
-              service: pending.service || null
+              service: pending.service || null,
+              created_at: pending.created_at || null
             });
           }
         });
@@ -1151,7 +1152,7 @@ const syncWithCloud = (manual = false) => {
         localStorage.setItem("miri_wa_number", d[0].wa); 
         localStorage.setItem("miri_mp_link", d[0].mp); 
         WHATSAPP_NUMBER = d[0].wa;
-        MERCADO_PAGO_LINK = d[0].mp;
+        BANK_ALIAS = d[0].mp;
         
         // Actualizar UI si existe el número en el contacto
         const displayNum = document.getElementById("display-number");
@@ -1197,8 +1198,23 @@ const startCloudSyncPolling = () => {
 
 const renderAdminBookings = () => {
   const t = document.getElementById("adminBookingsTable"); if(!t) return;
-  // Limpiar tabla pero mantener el encabezado si lo hay
-  t.innerHTML = `<tr><th>Fecha</th><th>Hora</th><th>Estudio</th><th>Cliente</th><th>Acción</th></tr>`;
+  
+  // Usar una estructura que se adapte mejor a móviles (cabecera oculta en móvil, filas como tarjetas)
+  t.innerHTML = `
+    <thead>
+      <tr>
+        <th>Fecha</th>
+        <th>Hora</th>
+        <th>Estudio</th>
+        <th>Cliente</th>
+        <th>Creado</th>
+        <th>Acción</th>
+      </tr>
+    </thead>
+    <tbody id="adminBookingsTableBody"></tbody>
+  `;
+  
+  const tbody = document.getElementById("adminBookingsTableBody");
   const b = JSON.parse(localStorage.getItem("bookedSlots") || "{}"); 
   
   // Ordenar fechas para que las más recientes aparezcan arriba
@@ -1213,14 +1229,30 @@ const renderAdminBookings = () => {
     const dayBookings = (b[d] || []).filter(item => item !== null && item !== undefined);
     
     dayBookings.forEach(booking => { 
-      const r = t.insertRow(); 
+      const r = tbody.insertRow(); 
       
       const time = typeof booking === 'object' ? booking.time : booking;
       const studio = typeof booking === 'object' ? (booking.studio || "Monserrat") : "Monserrat";
       const clientName = typeof booking === 'object' ? (booking.name || "-") : "-";
+      const createdAt = typeof booking === 'object' ? (booking.created_at || null) : null;
+      
+      let creationStr = "-";
+      if (createdAt) {
+        const dateObj = new Date(createdAt);
+        creationStr = `${dateObj.getDate()}/${dateObj.getMonth()+1} ${dateObj.getHours()}:${String(dateObj.getMinutes()).padStart(2, '0')}`;
+      }
       
       const studioClass = isSameStudio(studio, "Monserrat") ? "monserrat" : "jose-marmol";
-      r.innerHTML = `<td>${d}</td><td>${time}</td><td><span class="studio-tag ${studioClass}">${studio}</span></td><td>${clientName}</td><td><button onclick="releaseSlot('${d}','${time}','${studio}')">Liberar</button></td>`; 
+      
+      // Añadimos data-label para el responsive CSS
+      r.innerHTML = `
+        <td data-label="Fecha">${d}</td>
+        <td data-label="Hora">${time}</td>
+        <td data-label="Estudio"><span class="studio-tag ${studioClass}">${studio}</span></td>
+        <td data-label="Cliente">${clientName}</td>
+        <td data-label="Creado"><small>${creationStr}</small></td>
+        <td data-label="Acción"><button class="button-release" onclick="releaseSlot('${d}','${time}','${studio}')">Liberar</button></td>
+      `; 
     });
   });
 };
@@ -1255,13 +1287,31 @@ document.addEventListener('DOMContentLoaded', async () => {
     });
   }
 
-  // Cerrar menú al hacer clic en un link (opcional pero recomendado)
+  // Cerrar menú al hacer clic en un link
   document.querySelectorAll('.nav a').forEach(link => {
     link.addEventListener('click', () => {
       document.body.classList.remove('nav-active');
       if (menuToggle) menuToggle.setAttribute('aria-expanded', 'false');
     });
   });
+
+  // --- Botón de Admin en Móvil (Footer) ---
+  const footerBottom = document.querySelector('.footer-bottom');
+  if (footerBottom) {
+    const adminBtn = document.createElement('button');
+    adminBtn.innerHTML = '⚙️';
+    adminBtn.style = 'position:fixed; bottom:10px; right:10px; width:50px; height:50px; background:transparent; border:0; z-index:9999; cursor:default; opacity:0;';
+    adminBtn.onclick = () => {
+      let c = parseInt(adminBtn.dataset.clicks || '0') + 1;
+      adminBtn.dataset.clicks = c;
+      if (c >= 5) {
+        openAdminPanel();
+        adminBtn.dataset.clicks = '0';
+      }
+      setTimeout(() => { adminBtn.dataset.clicks = '0'; }, 3000);
+    };
+    document.body.appendChild(adminBtn);
+  }
 
   // Asegurar que nada sea editable al cargar la página
   document.querySelectorAll('[contenteditable]').forEach(el => el.contentEditable = "false");
