@@ -961,7 +961,6 @@
         "html > body > div:nth-of-type(1) > main:nth-of-type(1) > section:nth-of-type(2) > div > div > div:nth-of-type(1) > div > button:nth-of-type(2) > span": "",
         "html > body > div:nth-of-type(1) > main:nth-of-type(1) > section:nth-of-type(2) > div > div > div:nth-of-type(2) > div:nth-of-type(3) > p:nth-of-type(1)": "Día: <strong id=\"summaryDate\"  spellcheck=\"false\"></strong>",
         "html > body > div:nth-of-type(1) > main:nth-of-type(1) > section:nth-of-type(2) > div > div > div:nth-of-type(2) > div:nth-of-type(3) > p:nth-of-type(2)": "Horario: <strong id=\"summaryTime\"  spellcheck=\"false\"></strong>",
-        "html > body > div:nth-of-type(1) > main:nth-of-type(1) > section:nth-of-type(2) > div > div > div:nth-of-type(2) > div:nth-of-type(3) > p:nth-of-type(3)": "Para confirmar el turno, es necesario realizar la transferencia de $10.000 para señar:<br>¡Hola! 😀 Te comparto mis datos para que puedas enviarla seña👇<br><strong>Alias:</strong> mirandaespeche<br><strong>CVU:</strong> 0000003100053982193453<br><strong>Nombre:</strong> Miranda Espeche",
         "html > body > div:nth-of-type(1) > main:nth-of-type(1) > section:nth-of-type(2) > div > div > div:nth-of-type(2) > div:nth-of-type(2) > h3:nth-of-type(1)": "Horarios disponibles para el <span id=\"selectedDateText\"  spellcheck=\"false\">--/--</span>",
         "html > body > div:nth-of-type(1) > main:nth-of-type(1) > section:nth-of-type(2) > div > div > div:nth-of-type(2) > div:nth-of-type(3) > h3:nth-of-type(1)": "Resumen de tu reserva"
       },
