@@ -817,3 +817,8 @@ body {
 
 .admin-lock-status { text-transform: none; }
 .admin-lock-status::first-letter { text-transform: uppercase; }
+
+/* Celular: los botones del inicio se repiten con la barra inferior (Servicios / Reservar), se ocultan */
+@media (max-width: 860px) {
+  .hero-actions { display: none !important; }
+}
