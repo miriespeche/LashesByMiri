@@ -822,3 +822,22 @@ body {
 @media (max-width: 860px) {
   .hero-actions { display: none !important; }
 }
+
+/* Tarjetas del inicio: rosadas como el resto de la página, con texto oscuro legible sobre las fotos */
+.hero-highlights article,
+.hero-card-grid > div {
+  background: linear-gradient(135deg, rgba(255, 244, 248, 0.96) 0%, rgba(244, 215, 225, 0.94) 100%);
+  border: 1px solid rgba(255, 255, 255, 0.7);
+  box-shadow: 0 14px 32px rgba(120, 50, 80, 0.22);
+}
+.hero-highlights strong,
+.hero-card-grid strong { color: #49343f; }
+.hero-highlights span,
+.hero-card-grid span { color: #7a5364; }
+
+/* Logo de Instagram en la paleta de la página (rosa) */
+.social-links a.social-icon {
+  background: linear-gradient(135deg, #e39cb7 0%, #bc6788 100%);
+  box-shadow: 0 10px 22px rgba(188, 103, 136, 0.35);
+}
+.social-links a.social-icon:hover { box-shadow: 0 14px 28px rgba(188, 103, 136, 0.45); }
