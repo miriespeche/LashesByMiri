@@ -1119,3 +1119,9 @@ html.splash-off::before, html.splash-off::after { display: none; }
     box-shadow: 0 14px 34px rgba(120, 50, 80, 0.22), inset 0 1px 0 rgba(255, 255, 255, 0.9) !important;
   }
 }
+
+/* Celular: separar el texto de presentación de las tarjetas blancas (antes quedaban pegados) */
+@media (max-width: 860px) {
+  .hero-pink .hero-lead { margin-bottom: 1.6rem; }
+  .hero-pink .hero-highlights { margin-top: 1.6rem; }
+}
