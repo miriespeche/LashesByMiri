@@ -1125,3 +1125,9 @@ html.splash-off::before, html.splash-off::after { display: none; }
   .hero-pink .hero-lead { margin-bottom: 1.6rem; }
   .hero-pink .hero-highlights { margin-top: 1.6rem; }
 }
+
+/* Celular: "Redes sociales" al final de la tarjeta del pie, alineado abajo a la izquierda */
+@media (max-width: 860px) {
+  .footer-grid > div:has(.social-links) { order: 3; text-align: left; }
+  .footer-grid > div:has(.social-links) .social-links { justify-content: flex-start; margin-top: 0.6rem; }
+}
