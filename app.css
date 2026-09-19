@@ -14,7 +14,7 @@
 html { -webkit-tap-highlight-color: transparent; }
 body { -webkit-font-smoothing: antialiased; }
 
-main { animation: appIn 0.55s cubic-bezier(0.16, 1, 0.3, 1) both; }
+main { animation: appIn 0.55s cubic-bezier(0.16, 1, 0.3, 1) backwards; }
 @keyframes appIn {
   from { opacity: 0; transform: translateY(14px); }
   to   { opacity: 1; transform: none; }
@@ -841,3 +841,281 @@ body {
   box-shadow: 0 10px 22px rgba(188, 103, 136, 0.35);
 }
 .social-links a.social-icon:hover { box-shadow: 0 14px 28px rgba(188, 103, 136, 0.45); }
+
+/* ==========================================================================
+   Encabezado de escritorio: barra flotante de vidrio
+   ========================================================================== */
+.nav .button-primary { color: #fff; }
+
+@media (min-width: 861px) {
+  .header {
+    position: fixed;
+    top: 0; left: 0; right: 0;
+    width: 100%;
+    margin: 0;
+    border-radius: 0;
+    background: linear-gradient(180deg, rgba(255, 255, 255, 0.62) 0%, rgba(255, 244, 249, 0.42) 100%);
+    -webkit-backdrop-filter: blur(20px) saturate(1.7);
+            backdrop-filter: blur(20px) saturate(1.7);
+    border: 0;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.7);
+    box-shadow: 0 8px 30px rgba(120, 50, 80, 0.12), inset 0 -1px 0 rgba(188, 103, 136, 0.08);
+    transition: background 0.3s ease, box-shadow 0.3s ease;
+  }
+  .header .header-bar { min-height: 78px; transition: min-height 0.3s ease; }
+  .header.is-scrolled {
+    background: linear-gradient(180deg, rgba(255, 252, 250, 0.86) 0%, rgba(255, 242, 247, 0.74) 100%);
+    box-shadow: 0 12px 36px rgba(120, 50, 80, 0.2), inset 0 -1px 0 rgba(188, 103, 136, 0.1);
+  }
+  .header.is-scrolled .header-bar { min-height: 64px; }
+  .header.is-scrolled .brand-mark { width: 44px; height: 44px; }
+
+  /* Menú interior más sutil, para que no se vea como una caja aparte */
+  .header .nav {
+    background: rgba(255, 255, 255, 0.5);
+    border: 1px solid rgba(255, 255, 255, 0.75);
+    box-shadow: inset 0 1px 0 rgba(255, 255, 255, 0.9), 0 4px 14px rgba(146, 82, 106, 0.08);
+  }
+}
+
+/* En la barra móvil también, un poco de vidrio y sombra al bajar */
+@media (max-width: 860px) {
+  .header.is-scrolled { box-shadow: 0 8px 28px rgba(120, 50, 80, 0.16); }
+}
+
+/* ==========================================================================
+   MOVIMIENTO — animaciones livianas (solo transform/opacity, sin librerías)
+   Se apagan con "reducir movimiento" del sistema.
+   ========================================================================== */
+
+
+
+@media (prefers-reduced-motion: no-preference) {
+
+
+
+  /* ---------- Aparición al bajar (escalonada) ---------- */
+  .reveal.is-visible { animation: revealUp 0.75s cubic-bezier(0.2, 0.8, 0.2, 1) backwards; animation-delay: calc(var(--i, 0) * 80ms); }
+  @keyframes revealUp { from { opacity: 0; transform: translateY(34px) scale(0.98); } to { opacity: 1; transform: none; } }
+
+  /* ---------- Inicio: entrada del texto y zoom lento del collage (solo escritorio) ---------- */
+  .hero-copy.is-visible .eyebrow,
+  .hero-copy.is-visible h1,
+  .hero-copy.is-visible .hero-lead,
+  .hero-copy.is-visible .hero-actions { animation: revealUp 0.8s cubic-bezier(0.2, 0.8, 0.2, 1) backwards; }
+  .hero-copy.is-visible h1 { animation-delay: 0.12s; }
+  .hero-copy.is-visible .hero-lead { animation-delay: 0.24s; }
+  .hero-copy.is-visible .hero-actions { animation-delay: 0.36s; }
+
+  @media (min-width: 861px) {
+    .hero-collage { animation: heroZoom 30s ease-in-out infinite alternate; will-change: transform; }
+    @keyframes heroZoom { from { transform: scale(1); } to { transform: scale(1.07); } }
+  }
+
+  /* ---------- Botones: brillo que cruza al pasar el mouse / al tocar ---------- */
+  .button-primary { position: relative; overflow: hidden; }
+  .button-primary::after {
+    content: ""; position: absolute; top: 0; bottom: 0; left: -60%; width: 40%;
+    background: linear-gradient(100deg, rgba(255, 255, 255, 0) 0%, rgba(255, 255, 255, 0.45) 50%, rgba(255, 255, 255, 0) 100%);
+    transform: translateX(0) skewX(-20deg);
+    pointer-events: none;
+  }
+  .button-primary:hover::after { transform: translateX(420%) skewX(-20deg); transition: transform 0.8s ease; }
+  /* Brillo suave y periódico en el botón principal del inicio */
+  .hero-actions .button-primary::after { animation: shineLoop 6s ease-in-out 2s infinite; }
+  @keyframes shineLoop { 0%, 70% { transform: translateX(0) skewX(-20deg); } 100% { transform: translateX(420%) skewX(-20deg); } }
+
+  /* Precio y etiquetas: pequeño "latido" al pasar por la tarjeta */
+  .service-card:hover .service-price { animation: pricePop 0.5s ease; }
+  @keyframes pricePop { 40% { transform: scale(1.1); } }
+  .gallery-item img { transition: transform 0.6s ease; }
+  .gallery-item:hover img { transform: scale(1.06); }
+
+  /* Logo de la marca y de Instagram */
+  .brand-mark { transition: transform 0.4s ease; }
+  .brand:hover .brand-mark { transform: rotate(-6deg) scale(1.06); }
+
+  /* ---------- Barra inferior (celular) ---------- */
+  @media (max-width: 860px) {
+    .tabbar { animation: tabIn 0.7s cubic-bezier(0.2, 0.8, 0.2, 1) 0.25s backwards; }
+    @keyframes tabIn { from { transform: translateY(120%); opacity: 0; } to { transform: none; opacity: 1; } }
+    .tabbar a.active .tab-ico { animation: tabPop 0.5s cubic-bezier(0.2, 0.9, 0.3, 1.4) 0.6s backwards; }
+    @keyframes tabPop { from { transform: scale(0.6); } to { transform: scale(1); } }
+  }
+
+  /* ---------- Reservas: calendario, horarios y resumen ---------- */
+  #calendarGrid.cal-enter .calendar-day { animation: dayPop 0.5s cubic-bezier(0.2, 0.9, 0.3, 1.2) backwards; animation-delay: calc(var(--d, 0) * 24ms); }
+  @keyframes dayPop { from { opacity: 0; transform: translateY(18px) scale(0.85); } to { opacity: 1; transform: none; } }
+
+  .slots-grid.slots-enter .slot-button { animation: chipIn 0.4s cubic-bezier(0.2, 0.9, 0.3, 1.2) backwards; animation-delay: calc(var(--s, 0) * 45ms); }
+  @keyframes chipIn { from { opacity: 0; transform: scale(0.8) translateY(8px); } to { opacity: 1; transform: none; } }
+
+  #bookingCalendar:not([style*="display: none"]) .calendar-wrapper,
+  .slots-wrapper, .booking-summary { animation: sheetUp 0.5s cubic-bezier(0.2, 0.8, 0.2, 1) backwards; }
+  @keyframes sheetUp { from { opacity: 0; transform: translateY(24px); } to { opacity: 1; transform: none; } }
+
+  .calendar-day.selected, .slot-button.selected { animation: selectPulse 0.45s cubic-bezier(0.2, 0.9, 0.3, 1.4); }
+  @keyframes selectPulse { 0% { transform: scale(0.9); } 60% { transform: scale(1.1); } }
+
+
+  /* ---------- Panel de administración ---------- */
+  .admin-overlay[style*="flex"] { animation: fadeIn 0.25s ease both; }
+  .admin-overlay[style*="flex"] .admin-modal { animation: modalUp 0.4s cubic-bezier(0.2, 0.9, 0.3, 1) both; }
+  @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } }
+  @keyframes modalUp { from { opacity: 0; transform: translateY(40px) scale(0.98); } to { opacity: 1; transform: none; } }
+  .admin-booking { animation: revealUp 0.4s ease backwards; }
+}
+
+/* En pantallas táctiles el "hover" no existe: no dejar estados pegados */
+@media (hover: none) {
+  .button-primary:hover::after { transform: translateX(0) skewX(-20deg); transition: none; }
+}
+
+/* ==========================================================================
+   LOGO DE LA MARCA (monograma "M" en el encabezado, logo completo en la carga)
+   Se aplica por CSS: el texto "LM" queda oculto y no se pisa con los cambios guardados.
+   ========================================================================== */
+.brand-mark {
+  font-size: 0 !important;
+  color: transparent !important;
+  background:
+    url("img/logo-m.png") calc(50% - 3.6px) calc(50% + 0.6px) / 68% no-repeat,
+    linear-gradient(135deg, rgba(255, 255, 255, 0.95), rgba(244, 215, 225, 0.9)) !important;
+}
+
+
+
+/* El sitio borra el fondo de todo lo "editable"; el logo necesita conservar el suyo */
+body:not(.editing-mode) .brand .brand-mark[contenteditable] {
+  background:
+    url("img/logo-m.png") calc(50% - 3.6px) calc(50% + 0.6px) / 68% no-repeat,
+    linear-gradient(135deg, rgba(255, 255, 255, 0.95), rgba(244, 215, 225, 0.9)) !important;
+  border: 1px solid rgba(201, 165, 106, 0.28) !important;
+  box-shadow: 0 10px 24px rgba(146, 82, 106, 0.16) !important;
+}
+
+
+/* ==========================================================================
+   PANTALLA DE CARGA (cada vez que se abre o se cambia de página)
+   html::before = cortina negra · html::after = logo
+   Entrada: el logo aparece con un fundido suave que lo enfoca y una leve respiración.
+   Salida: el logo se agranda y se desvanece mientras la cortina negra se desvanece pareja
+   y deja ver la página.
+   ========================================================================== */
+html::before, html::after { content: ""; position: fixed; pointer-events: none; }
+html::before { inset: 0; z-index: 99998; background: #141414; }
+html::after {
+  z-index: 99999; left: 50%; top: 50%;
+  width: min(54vw, 240px); aspect-ratio: 261 / 224;
+  transform: translate(-50%, -50%);
+  background: url("img/logo.png") center / contain no-repeat;
+  filter: drop-shadow(0 0 22px rgba(205, 120, 178, 0.35));
+}
+
+/* Sin animaciones (o si el sistema pide menos movimiento): simple fundido */
+html.is-ready::before, html.is-ready::after { opacity: 0; visibility: hidden; transition: opacity 0.4s ease, visibility 0s linear 0.4s; }
+html.splash-off::before, html.splash-off::after { display: none; }
+
+@media (prefers-reduced-motion: no-preference) {
+  /* Entrada */
+  html:not(.is-ready)::after {
+    animation: logoIn 0.9s cubic-bezier(0.2, 0.8, 0.2, 1) both, logoBreath 2.4s ease-in-out 0.9s infinite;
+  }
+  /* Entrada sutil: aparece desenfocada y un poco más chica, y se enfoca */
+  @keyframes logoIn {
+    from { opacity: 0; transform: translate(-50%, -50%) scale(0.93); filter: blur(9px) drop-shadow(0 0 22px rgba(205, 120, 178, 0.35)); }
+    to   { opacity: 1; transform: translate(-50%, -50%) scale(1);    filter: blur(0)   drop-shadow(0 0 22px rgba(205, 120, 178, 0.35)); }
+  }
+  /* Respiración suave mientras espera los datos (solo opacity: barato) */
+  @keyframes logoBreath { 0%, 100% { opacity: 1; } 50% { opacity: 0.78; } }
+
+  /* Salida */
+  html.is-ready::after {
+    opacity: 1; visibility: visible; transition: none;
+    animation: logoOut 0.6s cubic-bezier(0.5, 0, 0.75, 0) forwards;
+  }
+  html.is-ready::before {
+    opacity: 1; visibility: visible; transition: none;
+    animation: curtainFade 0.6s ease 0.2s forwards;
+  }
+  html.splash-quick.is-ready::after  { animation-duration: 0.4s; }
+  html.splash-quick.is-ready::before { animation-duration: 0.4s; animation-delay: 0.08s; }
+  @keyframes logoOut { to { opacity: 0; transform: translate(-50%, -50%) scale(1.35); filter: blur(6px); } }
+  /* Desvanecido parejo (sin abrirse desde las esquinas, que dejaba ver bordes claros) */
+  @keyframes curtainFade { from { opacity: 1; } to { opacity: 0; } }
+}
+
+
+/* ==========================================================================
+   INICIO — fondo rosa con dibujitos de pestañas, labios y flores (img/hero-fondo.jpg)
+   Texto oscuro y tarjetas blancas para que se lea bien.
+   Para volver a las fotos: en index.html quitar "hero-pink" del <section class="hero">
+   y "hero-soft" del <div class="hero-collage">.
+   ========================================================================== */
+.hero-pink { background: #fbd9e2; }
+
+.hero-collage.hero-soft {
+  display: block;
+  animation: none !important;
+  background:
+    linear-gradient(90deg, rgba(255, 247, 251, 0.5) 0%, rgba(255, 247, 251, 0.22) 50%, rgba(255, 247, 251, 0.05) 100%),
+    url("img/hero-fondo.jpg") center / cover no-repeat,
+    #fbd9e2;
+}
+.hero-pink .hero-overlay { display: none; }
+.hero-pink::after { display: none; }
+
+/* Texto oscuro sobre el rosa */
+.hero-pink .hero-copy { color: #3f2a35; }
+.hero-pink .hero-copy .eyebrow { color: #a24f73; background: rgba(255, 255, 255, 0.75); border-color: rgba(255, 255, 255, 0.9); }
+.hero-pink .hero-copy h1 { color: #3f2a35; text-shadow: 0 2px 18px rgba(255, 255, 255, 0.55); }
+.hero-pink .hero-lead { color: #5d3d4c; }
+
+/* Tarjetas blancas y "vidrio" sobre el fondo rosa */
+.hero-pink .hero-highlights article,
+.hero-pink .hero-card-grid > div {
+  background: rgba(255, 255, 255, 0.78);
+  border: 1px solid rgba(255, 255, 255, 0.95);
+  box-shadow: 0 12px 28px rgba(160, 70, 105, 0.18);
+}
+.hero-pink .hero-highlights strong, .hero-pink .hero-card-grid strong { color: #3f2a35; }
+.hero-pink .hero-highlights span, .hero-pink .hero-card-grid span { color: #6c4a59; }
+.hero-pink .hero-card { background: rgba(255, 255, 255, 0.62); border: 1px solid rgba(255, 255, 255, 0.9); }
+
+/* Botón secundario legible sobre rosa */
+.hero-pink .hero-actions .button-secondary { background: rgba(255, 255, 255, 0.9) !important; }
+
+/* Celular: la imagen se repite hacia abajo para que los dibujos no se agranden */
+@media (max-width: 860px) {
+  .hero-collage.hero-soft {
+    background:
+      linear-gradient(180deg, rgba(255, 247, 251, 0.38) 0%, rgba(255, 247, 251, 0.18) 100%),
+      url("img/hero-fondo.jpg") center top / auto 640px repeat-y,
+      #fbd9e2;
+  }
+}
+
+/* ==========================================================================
+   Encabezado en celular: barra de vidrio flotante (antes era un bloque blanco duro)
+   ========================================================================== */
+@media (max-width: 860px) {
+  .header {
+    top: calc(8px + env(safe-area-inset-top)) !important;
+    left: 10px !important; right: 10px !important;
+    width: auto !important;
+    padding-top: 0 !important;
+    border-radius: 24px !important;
+    background: linear-gradient(135deg, rgba(255, 255, 255, 0.55) 0%, rgba(255, 238, 245, 0.4) 100%) !important;
+    -webkit-backdrop-filter: blur(20px) saturate(1.7) !important;
+            backdrop-filter: blur(20px) saturate(1.7) !important;
+    border: 1px solid rgba(255, 255, 255, 0.75) !important;
+    box-shadow: 0 10px 30px rgba(120, 50, 80, 0.16), inset 0 1px 0 rgba(255, 255, 255, 0.85) !important;
+    transition: background 0.3s ease, box-shadow 0.3s ease;
+  }
+  .header .header-bar { min-height: 58px; padding: 0 0.9rem; }
+  .header .brand-mark { width: 40px; height: 40px; }
+  .header.is-scrolled {
+    background: linear-gradient(135deg, rgba(255, 252, 250, 0.82) 0%, rgba(255, 240, 246, 0.7) 100%) !important;
+    box-shadow: 0 14px 34px rgba(120, 50, 80, 0.22), inset 0 1px 0 rgba(255, 255, 255, 0.9) !important;
+  }
+}

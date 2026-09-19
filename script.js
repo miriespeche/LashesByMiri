@@ -198,7 +198,21 @@ const getPageChanges = (id) => {
   try { return JSON.parse(localStorage.getItem(`miri_changes_${id}`) || "null"); } catch (e) { return null; }
 };
 
-const revealPage = () => { document.body.style.opacity = "1"; };
+let pageRevealed = false;
+const revealPage = () => {
+  if (pageRevealed) return;
+  pageRevealed = true;
+  const root = document.documentElement;
+  // Primera vez de la visita: se ve un poco más (~1.6 s); al cambiar de página, una versión corta (~0.8 s)
+  const quick = root.classList.contains("splash-quick");
+  const minMs = quick ? 800 : 1600;
+  setTimeout(() => {
+    document.body.style.opacity = "1";
+    root.classList.add("is-ready");
+    try { sessionStorage.setItem("miri_splash", "1"); } catch (e) {}
+    setTimeout(() => root.classList.add("splash-off"), quick ? 900 : 1600);
+  }, Math.max(0, minMs - performance.now()));
+};
 setTimeout(revealPage, 4000);
 
 const escapeHtml = (value) => String(value ?? "").replace(/[&<>"']/g, (c) => (
@@ -868,6 +882,7 @@ if(currentPage === "reservar") {
   const monthEl = document.getElementById("currentMonth");
   const slotsGrid = document.getElementById("slotsGrid");
   let curr = new Date(); let selD = null; let selT = null; let selStudio = null;
+  let animCal = false, animSlots = false; // se activan solo en acciones de la clienta
   // Usar WORK_SLOTS dinámicos
   // const slots = ["09:00", "10:00", "11:00", "12:00", "14:00", "15:00", "16:00", "17:00", "18:00"];
 
@@ -878,11 +893,13 @@ if(currentPage === "reservar") {
       btn.classList.add("selected");
       selStudio = btn.dataset.studio;
       document.getElementById("bookingCalendar").style.display = "block";
+      animCal = true;
       renderCal();
     };
   });
 
   const renderCal = () => {
+    grid.classList.toggle("cal-enter", animCal); animCal = false;
     grid.innerHTML = ""; monthEl.textContent = new Intl.DateTimeFormat("es-ES", {month:"long", year:"numeric"}).format(curr);
     ["Dom", "Lun", "Mar", "Mié", "Jue", "Vie", "Sáb"].forEach(d => { const h = document.createElement("div"); h.className="calendar-day-head"; h.textContent=d; grid.appendChild(h); });
     
@@ -897,6 +914,7 @@ if(currentPage === "reservar") {
       const d = document.createElement("div"); d.className="calendar-day"; d.textContent=i;
       const dObj = new Date(curr.getFullYear(), curr.getMonth(), i);
       d.dataset.dow = ["Dom", "Lun", "Mar", "Mié", "Jue", "Vie", "Sáb"][dObj.getDay()];
+      d.style.setProperty("--d", Math.min(i, 24));
       const dStr = formatDate(dObj);
       const normD = normalizeDateStr(dStr);
       
@@ -929,6 +947,7 @@ if(currentPage === "reservar") {
           document.getElementById("bookingSummary").style.display="none"; 
           document.getElementById("selectedDateText").textContent=dStr; 
           document.getElementById("slotsContainer").style.display="block"; 
+          animSlots = true;
           renderCal(); 
         };
       }
@@ -944,6 +963,7 @@ if(currentPage === "reservar") {
   };
 
   const renderSlots = (dStr) => {
+    slotsGrid.classList.toggle("slots-enter", animSlots); animSlots = false;
     slotsGrid.innerHTML = ""; 
     const normD = normalizeDateStr(dStr);
     const allBooked = JSON.parse(localStorage.getItem("bookedSlots") || "{}")[normD] || [];
@@ -980,6 +1000,7 @@ if(currentPage === "reservar") {
 
     daySlots.forEach(t => {
       const b = document.createElement("button"); b.className="slot-button"; b.textContent=t;
+      b.style.setProperty("--s", Math.min(slotsGrid.children.length, 12));
       
       // Verificar si el slot está ocupado para el estudio seleccionado
       const isBooked = allBooked.some(booking => {
@@ -1017,8 +1038,8 @@ if(currentPage === "reservar") {
   window.addEventListener("mouseup", () => { dragging = false; setTimeout(() => grid.classList.remove("dragging"), 0); });
   grid.addEventListener("click", (e) => { if (dragMoved) { e.stopPropagation(); e.preventDefault(); dragMoved = false; } }, true);
 
-  document.getElementById("prevMonth").onclick = () => { curr.setMonth(curr.getMonth()-1); renderCal(); };
-  document.getElementById("nextMonth").onclick = () => { curr.setMonth(curr.getMonth()+1); renderCal(); };
+  document.getElementById("prevMonth").onclick = () => { curr.setMonth(curr.getMonth()-1); animCal = true; renderCal(); };
+  document.getElementById("nextMonth").onclick = () => { curr.setMonth(curr.getMonth()+1); animCal = true; renderCal(); };
   document.getElementById("confirmBooking").onclick = async () => {
     const nameInput = document.getElementById("clientName");
     const name = nameInput.value.trim();
@@ -1145,50 +1166,6 @@ if(currentPage === "reservar") {
   renderCal();
 }
 
-// --- Gestión de Redirección Post-Pago (WhatsApp) ---
-const checkPendingWA = () => {
-  const pendingWA = sessionStorage.getItem("pendingWA");
-  if (pendingWA) {
-    sessionStorage.removeItem("pendingWA");
-    
-    // Feedback visual para el usuario
-    const overlay = document.createElement("div");
-    overlay.style = "position:fixed;top:0;left:0;width:100%;height:100%;background:rgba(255,255,255,0.95);z-index:10000;display:flex;flex-direction:column;align-items:center;justify-content:center;font-family:sans-serif;text-align:center;padding:2rem;";
-    overlay.innerHTML = `
-      <div style="font-size:1.5rem;color:#d4af37;margin-bottom:1rem;font-weight:bold;">¡Turno Agendado!</div>
-      <p style="margin-bottom:1rem;color:#333;">Para confirmar los detalles finales, abrí WhatsApp.</p>
-      <button id="openWhatsAppBtn" class="button button-primary" style="min-height:44px; padding:0.8rem 1.2rem; margin-bottom:0.75rem;">Abrir WhatsApp</button>
-      <a href="${pendingWA}" target="_blank" rel="noopener noreferrer" style="color:#4a5568; text-decoration:underline; font-size:0.95rem;">Si no se abre, tocá acá</a>
-      <div class="loader-simple" aria-hidden="true" style="margin-top:1.25rem;width:40px;height:40px;border:4px solid #f3f3f3;border-top:4px solid #d4af37;border-radius:50%;animation:spin 1s linear infinite;"></div>
-      <style>@keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }</style>
-    `;
-    document.body.appendChild(overlay);
-
-    const btn = overlay.querySelector("#openWhatsAppBtn");
-    if (btn) {
-      btn.addEventListener("click", () => {
-        // En click (gesto del usuario) los navegadores suelen permitir abrir WhatsApp sin bloquear.
-        window.location.href = pendingWA;
-      });
-    }
-
-    // Intento automático (puede fallar por políticas del navegador); el botón queda como fallback confiable.
-    setTimeout(() => {
-      try {
-        window.location.href = pendingWA;
-      } catch (e) {
-        // No hacemos nada: el usuario tiene el botón/link visible.
-      }
-    }, 800);
-  }
-};
-
-// Ejecutar en múltiples eventos para asegurar que se dispare al volver de MP
-window.addEventListener('load', checkPendingWA);
-if (document.readyState === 'complete') checkPendingWA();
-document.addEventListener('visibilitychange', () => {
-  if (document.visibilityState === 'visible') checkPendingWA();
-});
 
 // --- Edición y Sincronización ---
 const enableVisualEditing = () => {
@@ -1584,6 +1561,19 @@ document.addEventListener('DOMContentLoaded', async () => {
       if (menuToggle) menuToggle.setAttribute('aria-expanded', 'false');
     });
   });
+
+  // --- Aparición escalonada: cada tarjeta de una grilla entra un poquito después de la anterior ---
+  document.querySelectorAll('.services-grid, .page-links-grid, .info-grid, .about-features, .hero-highlights, .hero-card-grid, .gallery-grid').forEach(grid => {
+    [...grid.children].forEach((child, i) => child.style.setProperty('--i', Math.min(i, 8)));
+  });
+
+  // --- Encabezado de vidrio: cambia de aspecto al bajar ---
+  const siteHeader = document.querySelector('.header');
+  if (siteHeader) {
+    const onScrollHeader = () => siteHeader.classList.toggle('is-scrolled', window.scrollY > 24);
+    onScrollHeader();
+    window.addEventListener('scroll', onScrollHeader, { passive: true });
+  }
 
   // --- Navegación activa + barra inferior estilo app (móvil) ---
   const TAB_ICONS = {
