@@ -1,0 +1,819 @@
+/* ==========================================================================
+   LASHSTUDIOBYMIRI — capa "app web"
+   Se carga DESPUÉS de style.css. Solo cambia formato/estética (no textos ni fotos).
+   Para volver al diseño anterior: borrar el <link> a app.css de los HTML.
+   ========================================================================== */
+
+:root {
+  --app-radius: 26px;
+  --app-card-shadow: 0 10px 30px rgba(146, 82, 106, 0.09);
+  --app-grad: linear-gradient(135deg, #e39cb7 0%, #bc6788 100%);
+  --app-tab-h: 68px;
+}
+
+html { -webkit-tap-highlight-color: transparent; }
+body { -webkit-font-smoothing: antialiased; }
+
+main { animation: appIn 0.55s cubic-bezier(0.16, 1, 0.3, 1) both; }
+@keyframes appIn {
+  from { opacity: 0; transform: translateY(14px); }
+  to   { opacity: 1; transform: none; }
+}
+@media (prefers-reduced-motion: reduce) {
+  main { animation: none; }
+}
+
+/* ---------- Encabezado: barra de app translúcida ---------- */
+.header {
+  background: rgba(255, 252, 250, 0.82);
+  border-bottom: 1px solid rgba(188, 103, 136, 0.1);
+  box-shadow: 0 6px 24px rgba(146, 82, 106, 0.06);
+}
+.header-bar { min-height: 76px; }
+.brand-mark { border-radius: 16px; }
+
+/* Menú de escritorio como control segmentado */
+@media (min-width: 861px) {
+  .nav {
+    gap: 0.25rem;
+    padding: 0.35rem;
+    background: rgba(255, 255, 255, 0.85);
+    border: 1px solid var(--border);
+    border-radius: 999px;
+    box-shadow: var(--shadow-soft);
+  }
+  .nav > a:not(.button) {
+    padding: 0.6rem 1.05rem;
+    border-radius: 999px;
+    transition: background 0.2s ease, color 0.2s ease;
+  }
+  .nav > a:not(.button)::after { display: none; }
+  .nav > a:not(.button):hover { background: var(--primary-soft); color: var(--primary-strong); }
+  .nav > a:not(.button).active {
+    background: var(--app-grad);
+    color: #fff;
+    box-shadow: 0 8px 18px rgba(188, 103, 136, 0.28);
+  }
+  .nav .button { min-height: 44px; padding: 0.6rem 1.25rem; }
+}
+
+/* ---------- Tarjetas con formato de app ---------- */
+.service-card, .info-card, .about-card, .contact-card, .stat-card,
+.page-link-card, .testimonials-card, .hero-card, .card-glass {
+  border-radius: var(--app-radius);
+  border: 1px solid rgba(188, 103, 136, 0.12);
+  box-shadow: var(--app-card-shadow);
+}
+.service-card { padding: 1.6rem; }
+.service-card:hover { transform: translateY(-3px); }
+.service-tag {
+  align-self: flex-start;
+  padding: 0.3rem 0.8rem;
+  border-radius: 999px;
+  background: var(--primary-soft);
+  color: var(--primary-strong);
+  font-size: 0.72rem;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+}
+.services-grid { gap: 1.25rem; }
+.page-hero-content { border-radius: 30px; }
+.footer-grid { border-radius: var(--app-radius); }
+
+/* ---------- Barra inferior tipo app (se inyecta desde script.js) ---------- */
+.tabbar { display: none; }
+
+@media (max-width: 860px) {
+  .menu-toggle { display: none !important; }
+  .nav { display: none !important; }
+
+  .header {
+    position: fixed !important;
+    top: 0; left: 0; right: 0;
+    background: rgba(255, 252, 250, 0.9) !important;
+    backdrop-filter: blur(16px) !important;
+    -webkit-backdrop-filter: blur(16px) !important;
+    padding-top: env(safe-area-inset-top);
+  }
+  .header-bar { min-height: 64px; padding: 0 1rem; }
+
+  .site-shell { padding-bottom: calc(var(--app-tab-h) + 34px + env(safe-area-inset-bottom)); }
+
+  .tabbar {
+    position: fixed;
+    left: 12px; right: 12px;
+    bottom: calc(12px + env(safe-area-inset-bottom));
+    height: var(--app-tab-h);
+    z-index: 900;
+    display: grid;
+    grid-template-columns: repeat(6, 1fr);
+    align-items: center;
+    padding: 0 0.35rem;
+    background: rgba(255, 255, 255, 0.92);
+    backdrop-filter: blur(18px);
+    -webkit-backdrop-filter: blur(18px);
+    border: 1px solid rgba(188, 103, 136, 0.16);
+    border-radius: 26px;
+    box-shadow: 0 16px 40px rgba(146, 82, 106, 0.22);
+  }
+  .tabbar a {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    gap: 3px;
+    height: 100%;
+    color: var(--muted);
+    font-size: 0.62rem;
+    font-weight: 700;
+    letter-spacing: 0.01em;
+    text-decoration: none;
+    transition: color 0.2s ease, transform 0.2s ease;
+  }
+  .tabbar a:active { transform: scale(0.92); }
+  .tabbar svg {
+    width: 22px; height: 22px;
+    fill: none; stroke: currentColor;
+    stroke-width: 1.8; stroke-linecap: round; stroke-linejoin: round;
+  }
+  .tabbar a.active { color: var(--primary-strong); }
+  .tabbar a.active .tab-ico {
+    background: var(--primary-soft);
+  }
+  .tab-ico {
+    display: grid; place-items: center;
+    width: 40px; height: 26px;
+    border-radius: 999px;
+    transition: background 0.2s ease;
+  }
+  /* "Reservar" destacado */
+  .tabbar a.tab-cta { color: #fff; }
+  .tabbar a.tab-cta .tab-ico {
+    width: 44px; height: 44px;
+    margin-top: -18px;
+    border-radius: 16px;
+    background: var(--app-grad);
+    box-shadow: 0 10px 22px rgba(188, 103, 136, 0.45);
+  }
+  .tabbar a.tab-cta span.tab-label { color: var(--primary-strong); }
+
+  body.editing-mode .tabbar { display: none; }
+  body.nav-active { overflow: auto; }
+
+  /* Secciones más compactas, sensación de pantalla de app */
+  .section { padding: 2rem 0; }
+  .page-hero { padding: 6rem 0 1.25rem; }
+  .page-hero-content { padding: 1.5rem; }
+  .services-grid { gap: 1rem; }
+  .service-card { padding: 1.3rem; }
+  .footer { padding: 1rem 0 0.5rem; }
+  .button { border-radius: 18px; }
+}
+
+/* El panel admin siempre por encima de todo */
+.admin-overlay { z-index: 20000 !important; }
+.admin-alert { z-index: 20001; }
+
+/* ==========================================================================
+   RESERVAS — selector de estudio + calendario rediseñado
+   ========================================================================== */
+
+.booking-container {
+  max-width: 980px;
+  gap: 1.25rem;
+}
+
+/* Selector de estudio: control segmentado */
+.studio-selector {
+  padding: 1.5rem;
+  margin-bottom: 0;
+  border-radius: var(--app-radius);
+  box-shadow: var(--app-card-shadow);
+}
+.studio-selector h3 {
+  font-size: 1.7rem;
+  margin-bottom: 1rem;
+}
+.studio-options {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 0.5rem;
+  padding: 0.35rem;
+  background: var(--surface-soft);
+  border: 1px solid var(--border);
+  border-radius: 20px;
+}
+.studio-button {
+  justify-content: center;
+  gap: 0.6rem;
+  padding: 0.95rem 0.75rem;
+  border: 0;
+  border-radius: 16px;
+  background: transparent;
+  box-shadow: none;
+  font-size: 1rem;
+  color: var(--muted);
+}
+.studio-button:hover { transform: none; box-shadow: none; background: rgba(255, 255, 255, 0.7); }
+.studio-button.selected {
+  transform: none;
+  background: #fff;
+  color: var(--primary-strong);
+  box-shadow: 0 6px 18px rgba(188, 103, 136, 0.2);
+}
+
+/* Contenedor del paso 2: calendario a la izquierda, horarios + resumen a la derecha */
+#bookingCalendar { grid-column: 1 / -1; }
+#bookingCalendar:not([style*="display: none"]) {
+  display: grid !important;
+  grid-template-columns: minmax(0, 1.1fr) minmax(0, 0.9fr);
+  gap: 1.25rem;
+  align-items: start;
+}
+#bookingCalendar .calendar-wrapper { grid-column: 1; grid-row: 1 / span 2; }
+#bookingCalendar .slots-wrapper    { grid-column: 2; grid-row: 1; }
+#bookingCalendar .booking-summary  { grid-column: 2; grid-row: 2; }
+
+.calendar-wrapper, .slots-wrapper, .booking-summary {
+  padding: 1.5rem;
+  border-radius: var(--app-radius);
+  box-shadow: var(--app-card-shadow);
+  background: #fff;
+}
+
+/* Cabecera del calendario */
+.calendar-header {
+  margin-bottom: 1.1rem;
+  padding: 0.35rem;
+  background: var(--surface-soft);
+  border: 1px solid var(--border);
+  border-radius: 999px;
+}
+.calendar-header h2 {
+  font-size: 1.45rem;
+  letter-spacing: 0.01em;
+}
+.calendar-header h2::first-letter { text-transform: uppercase; }
+.calendar-header button {
+  width: 42px; height: 42px;
+  display: grid; place-items: center;
+  background: #fff;
+  border: 0;
+  box-shadow: 0 4px 12px rgba(188, 103, 136, 0.18);
+  font-size: 1rem;
+  line-height: 1;
+}
+.calendar-header button:hover { background: var(--primary-soft); color: var(--primary-strong); }
+.calendar-header button:active { transform: scale(0.92); }
+
+/* Rejilla */
+.calendar-grid { gap: 0.3rem; }
+.calendar-day-head {
+  font-size: 0.68rem;
+  letter-spacing: 0.06em;
+  padding: 0.25rem 0 0.5rem;
+  color: var(--primary-strong);
+  opacity: 0.8;
+}
+.calendar-day {
+  position: relative;
+  border-radius: 50%;
+  font-size: 0.95rem;
+  font-weight: 700;
+  color: var(--text);
+  border: 1.5px solid transparent;
+  background: rgba(244, 215, 225, 0.22);
+  user-select: none;
+  transition: background 0.2s ease, transform 0.15s ease, box-shadow 0.2s ease, border-color 0.2s ease;
+}
+.calendar-day.empty { background: transparent; cursor: default; }
+.calendar-day:hover:not(.empty):not(.disabled):not(.selected) {
+  background: var(--primary-soft);
+  border-color: rgba(217, 138, 167, 0.5);
+}
+.calendar-day:active:not(.empty):not(.disabled) { transform: scale(0.92); }
+.calendar-day.today {
+  color: var(--gold);
+  border-color: var(--gold);
+  background: rgba(201, 165, 106, 0.1);
+}
+.calendar-day.selected {
+  background: var(--app-grad);
+  color: #fff;
+  border-color: transparent;
+  box-shadow: 0 8px 18px rgba(188, 103, 136, 0.42);
+  transform: scale(1.06);
+}
+.calendar-day.disabled {
+  background: transparent;
+  color: #b9adb2;
+  opacity: 0.55;
+  cursor: default;
+}
+
+/* Puntos de turnos: debajo del número, sin desplazarlo */
+.calendar-day .day-indicator {
+  position: absolute;
+  left: 0; right: 0;
+  bottom: 14%;
+  margin: 0;
+  height: 5px;
+  gap: 3px;
+}
+.dot-indicator { width: 5px; height: 5px; }
+.calendar-day.selected .dot-indicator { box-shadow: 0 0 0 1.5px rgba(255, 255, 255, 0.9); }
+
+/* Horarios como chips */
+.slots-wrapper h3, .booking-summary h3 {
+  font-size: 1.45rem;
+  margin-bottom: 1rem;
+}
+.slots-grid {
+  grid-template-columns: repeat(3, 1fr);
+  gap: 0.5rem;
+  margin-top: 0;
+}
+.slots-grid > p { grid-column: 1 / -1; margin: 0; color: var(--muted); }
+.slot-button {
+  padding: 0.85rem 0.25rem;
+  border-radius: 999px;
+  border: 1.5px solid rgba(217, 138, 167, 0.35);
+  background: #fff;
+  color: var(--primary-strong);
+  font-size: 0.95rem;
+}
+.slot-button:hover:not(.booked):not(.selected) { background: var(--primary-soft); border-color: var(--primary); }
+.slot-button:active:not(.booked) { transform: scale(0.95); }
+.slot-button.selected {
+  background: var(--app-grad);
+  color: #fff;
+  border-color: transparent;
+  box-shadow: 0 8px 18px rgba(188, 103, 136, 0.35);
+}
+.slot-button.booked {
+  background: #f4f0f1;
+  color: #b9adb2;
+  border-color: transparent;
+  text-decoration: line-through;
+  opacity: 0.8;
+}
+
+/* Resumen */
+.booking-summary .form-group input { border-radius: 16px; }
+.summary-note-box { border-radius: 18px; }
+#confirmBooking { border-radius: 18px; }
+
+@media (max-width: 860px) {
+  .booking-container { grid-template-columns: 1fr; gap: 1rem; }
+  .studio-selector { grid-column: auto; padding: 1.1rem; }
+  #bookingCalendar:not([style*="display: none"]) {
+    grid-template-columns: 1fr;
+    gap: 1rem;
+  }
+  #bookingCalendar .calendar-wrapper,
+  #bookingCalendar .slots-wrapper,
+  #bookingCalendar .booking-summary { grid-column: 1; grid-row: auto; }
+  .calendar-wrapper, .slots-wrapper, .booking-summary { padding: 1.1rem; }
+  .calendar-day { font-size: 0.9rem; }
+  .studio-button { white-space: nowrap; font-size: 0.92rem; padding: 0.95rem 0.4rem; gap: 0.45rem; }
+}
+
+/* ==========================================================================
+   V2 — más "app": tira de días deslizable, tiles, ícono de Instagram
+   ========================================================================== */
+
+body {
+  background:
+    radial-gradient(520px 420px at 6% -4%, rgba(244, 215, 225, 0.9), transparent 70%),
+    radial-gradient(460px 380px at 96% 8%, rgba(240, 217, 203, 0.55), transparent 70%),
+    radial-gradient(520px 420px at 50% 108%, rgba(244, 215, 225, 0.55), transparent 70%),
+    linear-gradient(180deg, #fffdfb 0%, #fff7fa 50%, #fffaf7 100%);
+  background-attachment: fixed;
+}
+
+.button { transition: transform 0.18s ease, box-shadow 0.25s ease, background 0.25s ease; }
+.button:active { transform: scale(0.97); }
+
+/* Encabezados de sección */
+.eyebrow {
+  display: inline-flex; align-items: center; gap: 0.45rem;
+  padding: 0.38rem 0.85rem;
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.85);
+  border: 1px solid rgba(201, 165, 106, 0.3);
+}
+
+/* ---------- Instagram ---------- */
+.social-links a.social-icon {
+  display: grid; place-items: center;
+  width: 52px; height: 52px; padding: 0;
+  border-radius: 18px;
+  border: 0;
+  background: linear-gradient(45deg, #f9ce34 0%, #ee2a7b 45%, #6228d7 100%);
+  box-shadow: 0 10px 22px rgba(238, 42, 123, 0.32);
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+}
+.social-links a.social-icon:hover { transform: translateY(-3px) rotate(-4deg); box-shadow: 0 14px 28px rgba(238, 42, 123, 0.4); }
+.social-links a.social-icon:active { transform: scale(0.94); }
+.social-icon svg { width: 26px; height: 26px; fill: none; stroke: #fff; stroke-width: 1.9; stroke-linecap: round; stroke-linejoin: round; }
+.social-icon svg .ig-dot { fill: #fff; stroke: none; }
+
+/* ---------- Servicios: tarjeta tipo "fila de app" con el precio como pastilla ---------- */
+.service-card {
+  display: grid !important;
+  grid-template-columns: 1fr auto;
+  column-gap: 0.75rem;
+  row-gap: 0.55rem;
+  align-content: start;
+  padding: 1.35rem !important;
+  border-radius: 28px !important;
+  background: linear-gradient(180deg, #fff 0%, #fffafc 100%) !important;
+}
+.service-card > * { grid-column: 1 / -1; margin: 0 !important; }
+.service-card h3 { grid-column: 1; grid-row: 2; align-self: center; font-size: 1.65rem !important; }
+.service-card .service-price {
+  grid-column: 2; grid-row: 2; align-self: center;
+  padding: 0.35rem 0.85rem;
+  border-radius: 999px;
+  background: var(--primary-soft);
+  font-size: 1.35rem !important;
+  line-height: 1.2;
+  white-space: nowrap;
+}
+.service-card p { font-size: 0.95rem; line-height: 1.6 !important; }
+.service-card .price-list { display: grid; gap: 0.4rem; }
+.service-card .price-list p {
+  display: flex; justify-content: space-between; gap: 0.75rem;
+  padding: 0.6rem 0.85rem;
+  border-radius: 14px;
+  background: var(--surface-soft);
+}
+.services-grid a.button.button-secondary { margin-top: 0.4rem !important; border-radius: 16px !important; }
+
+/* ---------- Tiles del inicio ---------- */
+.hero-card-grid > div, .hero-highlights > article {
+  border-radius: 20px;
+  background: rgba(255, 255, 255, 0.75);
+  border: 1px solid rgba(188, 103, 136, 0.14);
+  box-shadow: 0 6px 16px rgba(146, 82, 106, 0.07);
+}
+
+/* Móvil: listas de tarjetas como carrusel deslizable */
+@media (max-width: 860px) {
+  .page-links-grid, .info-grid, .about-features {
+    display: flex !important;
+    overflow-x: auto;
+    gap: 0.9rem;
+    margin: 0 -1rem;
+    padding: 0.4rem 1rem 1.2rem;
+    scroll-snap-type: x mandatory;
+    scrollbar-width: none;
+  }
+  .page-links-grid::-webkit-scrollbar, .info-grid::-webkit-scrollbar, .about-features::-webkit-scrollbar { display: none; }
+  .page-links-grid > *, .info-grid > *, .about-features > * { flex: 0 0 84%; scroll-snap-align: center; }
+}
+
+/* ==========================================================================
+   Calendario de reservas: tira de días (deslizable)
+   ========================================================================== */
+#calendarGrid {
+  display: flex;
+  gap: 0.6rem;
+  overflow-x: auto;
+  padding: 0.7rem 0.3rem 1.1rem;
+  scroll-snap-type: x proximity;
+  scrollbar-width: thin;
+  scrollbar-color: rgba(217, 138, 167, 0.55) transparent;
+  -webkit-mask-image: linear-gradient(90deg, transparent 0, #000 22px, #000 calc(100% - 22px), transparent 100%);
+          mask-image: linear-gradient(90deg, transparent 0, #000 22px, #000 calc(100% - 22px), transparent 100%);
+  cursor: grab;
+}
+#calendarGrid.dragging { cursor: grabbing; scroll-snap-type: none; }
+#calendarGrid::-webkit-scrollbar { height: 5px; }
+#calendarGrid::-webkit-scrollbar-thumb { background: rgba(217, 138, 167, 0.55); border-radius: 99px; }
+@media (max-width: 860px) { #calendarGrid { scrollbar-width: none; } #calendarGrid::-webkit-scrollbar { display: none; } }
+
+#calendarGrid .calendar-day-head,
+#calendarGrid .calendar-day.empty { display: none; }
+
+#calendarGrid .calendar-day {
+  flex: 0 0 66px;
+  height: 104px;
+  aspect-ratio: auto;
+  flex-direction: column;
+  justify-content: center;
+  gap: 0.3rem;
+  border-radius: 26px;
+  background: #fff;
+  border: 1.5px solid rgba(217, 138, 167, 0.28);
+  box-shadow: 0 6px 16px rgba(146, 82, 106, 0.08);
+  font-family: "Cormorant Garamond", serif;
+  font-size: 1.9rem;
+  font-weight: 700;
+  line-height: 1;
+  scroll-snap-align: center;
+}
+#calendarGrid .calendar-day::before {
+  content: attr(data-dow);
+  font-family: "Manrope", sans-serif;
+  font-size: 0.66rem;
+  font-weight: 800;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  color: var(--muted);
+}
+#calendarGrid .calendar-day .day-indicator {
+  position: static;
+  height: 6px;
+  margin-top: 0.15rem;
+  justify-content: center;
+}
+#calendarGrid .calendar-day:hover:not(.disabled):not(.selected) {
+  transform: translateY(-4px);
+  border-color: var(--primary);
+  background: #fff;
+  box-shadow: 0 12px 24px rgba(188, 103, 136, 0.2);
+}
+#calendarGrid .calendar-day.today { border-color: var(--gold); background: #fffaf0; color: #a9803f; }
+#calendarGrid .calendar-day.today::before { color: #a9803f; }
+#calendarGrid .calendar-day.selected {
+  transform: translateY(-6px) scale(1.06);
+  background: var(--app-grad);
+  border-color: transparent;
+  color: #fff;
+  box-shadow: 0 16px 30px rgba(188, 103, 136, 0.45);
+}
+#calendarGrid .calendar-day.selected::before { color: rgba(255, 255, 255, 0.85); }
+#calendarGrid .calendar-day.disabled {
+  background: rgba(255, 255, 255, 0.5);
+  box-shadow: none;
+  border-color: rgba(188, 173, 178, 0.25);
+  color: #b9adb2;
+  opacity: 0.55;
+  transform: none;
+}
+/* Día bloqueado por Miri: rayado + candado */
+#calendarGrid .calendar-day.locked {
+  background: repeating-linear-gradient(135deg, rgba(244, 215, 225, 0.35) 0 6px, rgba(255, 255, 255, 0.6) 6px 12px);
+  opacity: 0.8;
+}
+#calendarGrid .calendar-day.locked::after {
+  content: "";
+  width: 16px; height: 16px;
+  background: no-repeat center / contain url("data:image/svg+xml,%3Csvg xmlns=%27http://www.w3.org/2000/svg%27 viewBox=%270 0 24 24%27 fill=%27none%27 stroke=%27%23bc6788%27 stroke-width=%272.2%27 stroke-linecap=%27round%27 stroke-linejoin=%27round%27%3E%3Crect x=%274.5%27 y=%2710.5%27 width=%2715%27 height=%2710%27 rx=%272.5%27/%3E%3Cpath d=%27M8 10.5V7.5a4 4 0 0 1 8 0v3%27/%3E%3C/svg%3E");
+}
+
+/* Distribución en escritorio: tira arriba a todo el ancho, horarios + resumen debajo */
+@media (min-width: 861px) {
+  #bookingCalendar .calendar-wrapper { grid-column: 1 / -1; grid-row: 1; }
+  #bookingCalendar .slots-wrapper    { grid-column: 1; grid-row: 2; }
+  #bookingCalendar .booking-summary  { grid-column: 2; grid-row: 2; }
+  #bookingCalendar:not([style*="display: none"]) { grid-template-columns: 1fr 1fr; }
+  .slots-grid { grid-template-columns: repeat(4, 1fr); }
+}
+@media (max-width: 860px) {
+  #calendarGrid .calendar-day { flex-basis: 60px; height: 96px; font-size: 1.7rem; border-radius: 22px; }
+}
+
+/* ==========================================================================
+   Panel MiriAdmin: bloqueo de turnos
+   ========================================================================== */
+.admin-lock-panel {
+  margin: 1.25rem 0;
+  padding: 1.1rem;
+  border-radius: 20px;
+  background: var(--surface-soft);
+  border: 1px solid var(--border);
+}
+.admin-lock-panel h4 { margin: 0 0 0.5rem; font-family: "Cormorant Garamond", serif; font-size: 1.4rem; }
+.admin-lock-status {
+  margin: 0 0 0.9rem;
+  padding: 0.6rem 0.9rem;
+  border-radius: 14px;
+  background: #e8f7ee;
+  color: #24704a;
+  font-weight: 700;
+  text-transform: capitalize;
+}
+.admin-lock-status.is-closed { background: #fdeaea; color: #a03a3a; }
+.admin-lock-actions { display: grid; grid-template-columns: repeat(auto-fit, minmax(210px, 1fr)); gap: 0.6rem; }
+.admin-lock-actions .button { width: 100%; min-height: 48px; padding: 0.7rem 1rem; font-size: 0.92rem; }
+.admin-lock-actions .button:disabled { opacity: 0.45; cursor: not-allowed !important; transform: none; }
+.admin-lock-help { margin: 0.8rem 0 0; font-size: 0.82rem; color: var(--muted); }
+#adminScheduleGrid .calendar-day.day-locked {
+  background: repeating-linear-gradient(135deg, rgba(244, 215, 225, 0.6) 0 5px, #fff 5px 10px);
+  color: #a03a3a;
+}
+#adminScheduleGrid .calendar-day.day-unlocked { box-shadow: inset 0 0 0 2px #48bb78; color: #24704a; }
+
+.nav .button { white-space: nowrap; }
+
+/* Evita que la tira de días estire las columnas de la grilla (bug de ancho en celular) */
+.booking-container { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+.booking-container > *, #bookingCalendar > * { min-width: 0; }
+@media (max-width: 860px) {
+  .booking-container, #bookingCalendar:not([style*="display: none"]) { grid-template-columns: minmax(0, 1fr); }
+}
+@media (min-width: 861px) {
+  #bookingCalendar:not([style*="display: none"]) { grid-template-columns: minmax(0, 1fr) minmax(0, 1fr); }
+}
+
+/* ==========================================================================
+   Pie de página: Instagram centrado
+   ========================================================================== */
+.footer-grid > div:has(.social-links) { text-align: center; }
+.footer-grid .footer-label { display: block; }
+.social-links { justify-content: center; }
+
+/* ==========================================================================
+   PANEL DE ADMINISTRACIÓN (MiriAdmin) — rediseño
+   ========================================================================== */
+.admin-overlay {
+  position: fixed; inset: 0;
+  display: none;
+  align-items: center; justify-content: center;
+  padding: 1rem;
+  background: rgba(43, 22, 32, 0.55);
+  -webkit-backdrop-filter: blur(8px); backdrop-filter: blur(8px);
+}
+.admin-overlay .admin-modal {
+  display: flex; flex-direction: column;
+  position: relative;
+  width: min(100%, 880px);
+  height: min(90vh, 900px);
+  max-height: none;
+  padding: 0;
+  overflow: hidden;
+  background: #fffaf7;
+  border-radius: 30px;
+  box-shadow: 0 40px 100px rgba(43, 22, 32, 0.45);
+}
+
+/* Cabecera */
+.admin-head {
+  flex: 0 0 auto;
+  display: flex; align-items: center; justify-content: space-between; gap: 1rem;
+  padding: 1.25rem 1.5rem;
+  background: linear-gradient(135deg, #e39cb7 0%, #bc6788 100%);
+  color: #fff;
+}
+.admin-kicker { font-size: 0.72rem; font-weight: 800; letter-spacing: 0.14em; text-transform: uppercase; opacity: 0.85; }
+.admin-overlay .admin-modal .admin-head h2 {
+  margin: 0.15rem 0 0; padding: 0; border: 0;
+  font-family: "Cormorant Garamond", serif; font-size: 2rem; line-height: 1.1; color: #fff;
+}
+.admin-overlay .admin-close {
+  position: static;
+  display: grid; place-items: center;
+  width: 46px; height: 46px; flex: 0 0 auto;
+  border-radius: 50%;
+  background: rgba(255, 255, 255, 0.22);
+  color: #fff; font-size: 1.8rem; line-height: 1;
+  transition: background 0.2s ease, transform 0.15s ease;
+}
+.admin-overlay .admin-close:hover { background: rgba(255, 255, 255, 0.35); }
+.admin-overlay .admin-close:active { transform: scale(0.92); }
+
+/* Pestañas */
+.admin-tabs {
+  flex: 0 0 auto;
+  display: flex; gap: 0.4rem;
+  padding: 0.7rem 1rem;
+  overflow-x: auto; scrollbar-width: none;
+  background: #fff;
+  border-bottom: 1px solid var(--border);
+}
+.admin-tabs::-webkit-scrollbar { display: none; }
+.admin-tab {
+  flex: 1 0 auto;
+  min-height: 46px; padding: 0.6rem 1.1rem;
+  border-radius: 999px;
+  font-size: 0.95rem; font-weight: 800;
+  color: var(--muted);
+  transition: background 0.2s ease, color 0.2s ease;
+}
+.admin-tab:hover { background: var(--primary-soft); color: var(--primary-strong); }
+.admin-tab.active { background: linear-gradient(135deg, #e39cb7, #bc6788); color: #fff; box-shadow: 0 8px 18px rgba(188, 103, 136, 0.3); }
+
+/* Cuerpo */
+.admin-body { flex: 1 1 auto; overflow-y: auto; padding: 1.25rem; -webkit-overflow-scrolling: touch; }
+.admin-pane { display: none; }
+.admin-pane.active { display: block; animation: appIn 0.3s ease both; }
+
+/* Tarjetas */
+.admin-card {
+  margin-bottom: 1rem; padding: 1.25rem;
+  background: #fff;
+  border: 1px solid rgba(188, 103, 136, 0.14);
+  border-radius: 22px;
+  box-shadow: 0 8px 22px rgba(146, 82, 106, 0.07);
+}
+.admin-card h3 { margin: 0 0 0.4rem; font-family: "Cormorant Garamond", serif; font-size: 1.55rem; line-height: 1.15; }
+.admin-hint { margin: 0 0 1rem; font-size: 0.92rem; line-height: 1.55; color: var(--muted); }
+.admin-sub { margin: 1.4rem 0 0.7rem; font-family: "Cormorant Garamond", serif; font-size: 1.25rem; }
+
+/* Formularios */
+.admin-overlay .admin-grid { display: grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap: 1rem; }
+.admin-overlay .admin-span { grid-column: 1 / -1; }
+.admin-overlay .admin-field { display: flex; flex-direction: column; gap: 0.4rem; }
+.admin-overlay .admin-field label { font-size: 0.85rem; font-weight: 800; color: var(--muted); }
+.admin-overlay .admin-field input,
+.admin-overlay .admin-field select {
+  width: 100%; min-height: 50px; padding: 0.7rem 1rem;
+  border: 1.5px solid rgba(217, 138, 167, 0.35);
+  border-radius: 14px;
+  background: #fffdfc;
+  font: inherit; font-size: 1rem; color: var(--text);
+}
+.admin-overlay .admin-field input:focus,
+.admin-overlay .admin-field select:focus { outline: none; border-color: var(--primary-strong); box-shadow: 0 0 0 4px rgba(217, 138, 167, 0.2); }
+.admin-overlay .button { min-height: 50px; padding: 0.75rem 1.2rem; font-size: 0.95rem; border-radius: 16px; }
+.admin-overlay .admin-save { width: 100%; margin-top: 1rem; }
+.admin-overlay .admin-danger { background: #fff0f0; color: #c53030; border: 1.5px solid #feb2b2; }
+.admin-overlay .admin-danger:hover { background: #c53030; color: #fff; }
+
+/* Calendario dentro del panel */
+.admin-cal { padding: 1rem; margin: 0; box-shadow: none; background: var(--surface-soft); border-radius: 20px; }
+
+/* Bloqueo: sin caja propia dentro de la tarjeta */
+.admin-card .admin-lock-panel { margin: 0; padding: 0; background: none; border: 0; }
+.admin-card .admin-lock-actions { grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); }
+
+/* Turnos */
+.admin-stats { display: grid; grid-template-columns: repeat(3, 1fr); gap: 0.6rem; margin-bottom: 1rem; }
+.admin-stat {
+  padding: 0.9rem 0.5rem; text-align: center;
+  background: #fff; border: 1px solid rgba(188, 103, 136, 0.14); border-radius: 18px;
+  box-shadow: 0 6px 16px rgba(146, 82, 106, 0.06);
+}
+.admin-stat strong { display: block; font-family: "Cormorant Garamond", serif; font-size: 2rem; line-height: 1; color: var(--primary-strong); }
+.admin-stat span { font-size: 0.75rem; font-weight: 800; letter-spacing: 0.08em; text-transform: uppercase; color: var(--muted); }
+
+.admin-segment { display: inline-grid; grid-auto-flow: column; gap: 0.25rem; padding: 0.3rem; margin-bottom: 1rem; background: var(--surface-soft); border: 1px solid var(--border); border-radius: 999px; }
+.admin-segment button { min-height: 40px; padding: 0.4rem 1.2rem; border-radius: 999px; font-weight: 800; color: var(--muted); }
+.admin-segment button.active { background: #fff; color: var(--primary-strong); box-shadow: 0 4px 12px rgba(188, 103, 136, 0.2); }
+
+.admin-day-head { margin: 1.1rem 0 0.5rem; font-size: 0.8rem; font-weight: 800; letter-spacing: 0.1em; text-transform: uppercase; color: var(--primary-strong); }
+.admin-booking {
+  display: grid; grid-template-columns: auto 1fr auto; align-items: center; gap: 0.9rem;
+  margin-bottom: 0.55rem; padding: 0.8rem 0.9rem;
+  background: #fff; border: 1px solid rgba(188, 103, 136, 0.14); border-radius: 18px;
+  box-shadow: 0 4px 12px rgba(146, 82, 106, 0.05);
+}
+.admin-booking-time {
+  min-width: 68px; padding: 0.6rem 0.5rem; text-align: center;
+  border-radius: 14px; background: linear-gradient(135deg, #e39cb7, #bc6788); color: #fff;
+  font-family: "Cormorant Garamond", serif; font-size: 1.35rem; font-weight: 700; line-height: 1;
+}
+.admin-booking-info { display: flex; flex-direction: column; gap: 0.15rem; min-width: 0; }
+.admin-booking-info strong { font-size: 1rem; overflow-wrap: anywhere; }
+.admin-booking-info span { font-size: 0.85rem; color: var(--muted); }
+.admin-booking-info small { font-size: 0.75rem; color: #a99aa1; }
+.admin-booking-info .studio-tag { font-style: normal; }
+.admin-overlay .button-release {
+  min-height: 42px; padding: 0.5rem 1rem; border-radius: 12px;
+  background: #fff0f0; color: #c53030; border: 1.5px solid #feb2b2;
+  font-size: 0.85rem; font-weight: 800;
+}
+.admin-overlay .button-release:hover { background: #c53030; color: #fff; }
+.admin-empty { padding: 2rem 1rem; text-align: center; color: var(--muted); border: 2px dashed rgba(217, 138, 167, 0.4); border-radius: 18px; }
+
+/* Avanzado */
+.admin-advanced summary { cursor: pointer; font-weight: 800; color: var(--primary-strong); list-style: none; }
+.admin-advanced summary::-webkit-details-marker { display: none; }
+.admin-advanced summary::after { content: "▾"; margin-left: 0.5rem; }
+.admin-advanced[open] summary::after { content: "▴"; }
+.admin-advanced[open] summary { margin-bottom: 0.7rem; }
+
+/* Aviso "Guardado" */
+.admin-toast {
+  position: absolute; left: 50%; bottom: 1.5rem; transform: translate(-50%, 20px);
+  padding: 0.75rem 1.3rem; border-radius: 999px;
+  background: #2b1620; color: #fff; font-weight: 700; font-size: 0.92rem;
+  opacity: 0; pointer-events: none; transition: opacity 0.25s ease, transform 0.25s ease;
+  z-index: 5;
+}
+.admin-toast.show { opacity: 1; transform: translate(-50%, 0); }
+
+/* Celular: hoja que sube desde abajo */
+@media (max-width: 640px) {
+  .admin-overlay { align-items: flex-end; padding: 0; }
+  .admin-overlay .admin-modal { width: 100%; height: 94dvh; border-radius: 28px 28px 0 0; }
+  .admin-head { padding: 1rem 1.1rem; }
+  .admin-overlay .admin-modal .admin-head h2 { font-size: 1.7rem; }
+  .admin-tab { padding: 0.5rem 0.9rem; }
+  .admin-body { padding: 1rem; }
+  .admin-booking { grid-template-columns: auto 1fr; }
+  .admin-booking .button-release { grid-column: 1 / -1; width: 100%; }
+}
+
+.admin-overlay .admin-cal .calendar-header h2 { margin: 0; padding: 0; border: 0; font-size: 1.3rem; color: var(--text); text-align: center; white-space: nowrap; }
+.admin-overlay .admin-cal .calendar-header { margin-bottom: 0.9rem; }
+@media (max-width: 640px) {
+  .admin-tabs { padding: 0.6rem 0.6rem; gap: 0.2rem; }
+  .admin-tab { flex: 1 1 0; min-width: 0; padding: 0.5rem 0.3rem; font-size: 0.88rem; }
+}
+
+.admin-lock-status { text-transform: none; }
+.admin-lock-status::first-letter { text-transform: uppercase; }

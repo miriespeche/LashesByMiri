@@ -22,6 +22,57 @@ const loadWorkSlots = () => {
 let WORK_SLOTS = loadWorkSlots();
 let CUSTOM_WORK_DAYS = JSON.parse(localStorage.getItem("miri_custom_days") || "{}");
 
+// --- Bloqueo de meses / desbloqueo de días ---
+// CLOSED_MONTHS["9/2026"] = true (cerrado) | false (abierto explícito). Si no está definido, aplica CLOSED_DEFAULT.
+// UNLOCKED_DAYS["23/9/2026"] = true: día habilitado dentro de un mes cerrado.
+const safeParse = (key, fallback) => { try { return JSON.parse(localStorage.getItem(key) || "") ?? fallback; } catch (e) { return fallback; } };
+let CLOSED_MONTHS = safeParse("miri_closed_months", {});
+let UNLOCKED_DAYS = safeParse("miri_unlocked_days", {});
+let CLOSED_DEFAULT = localStorage.getItem("miri_closed_default") === "1";
+
+const monthKeyOf = (date) => `${date.getMonth() + 1}/${date.getFullYear()}`;
+const isMonthClosed = (date) => {
+  const v = CLOSED_MONTHS[monthKeyOf(date)];
+  return v === undefined ? CLOSED_DEFAULT : !!v;
+};
+// Un día NO es reservable si su mes está cerrado y ella no lo desbloqueó
+const isDayLocked = (date) => isMonthClosed(date) && !UNLOCKED_DAYS[`${date.getDate()}/${date.getMonth() + 1}/${date.getFullYear()}`];
+
+const getSchedulePayload = () => ({
+  slots: WORK_SLOTS,
+  custom_days: CUSTOM_WORK_DAYS,
+  closed_months: CLOSED_MONTHS,
+  unlocked_days: UNLOCKED_DAYS,
+  closed_default: CLOSED_DEFAULT
+});
+
+const persistLockState = () => {
+  localStorage.setItem("miri_closed_months", JSON.stringify(CLOSED_MONTHS));
+  localStorage.setItem("miri_unlocked_days", JSON.stringify(UNLOCKED_DAYS));
+  localStorage.setItem("miri_closed_default", CLOSED_DEFAULT ? "1" : "0");
+};
+
+// Aplica una fila "schedule" (de la nube o del JSON) al estado local
+const applyScheduleData = (data) => {
+  if (!data) return;
+  if (data.slots) {
+    let incoming = data.slots;
+    if (Array.isArray(incoming)) incoming = { "Monserrat": incoming, "José Marmol": [...DEFAULT_SLOTS] };
+    localStorage.setItem("miri_work_slots", JSON.stringify(incoming));
+    WORK_SLOTS = incoming;
+  }
+  if (data.custom_days) {
+    localStorage.setItem("miri_custom_days", JSON.stringify(data.custom_days));
+    CUSTOM_WORK_DAYS = data.custom_days;
+  }
+  if (data.closed_months || data.unlocked_days || data.closed_default !== undefined) {
+    CLOSED_MONTHS = data.closed_months || {};
+    UNLOCKED_DAYS = data.unlocked_days || {};
+    CLOSED_DEFAULT = !!data.closed_default;
+    persistLockState();
+  }
+};
+
 // --- Helper de Fecha Consistente ---
 const normalizeDateStr = (dateStr) => {
   if (!dateStr) return dateStr;
@@ -134,11 +185,34 @@ let cloudSyncIntervalId = null;
 // Solo habilitamos la nube si la llave existe
 const isCloudEnabled = () => SUPABASE_URL !== "" && SUPABASE_KEY !== "";
 
-const cloudFetch = async (table) => {
+// La página queda oculta (CSS) hasta tener datos frescos; esto garantiza que nunca quede oculta para siempre.
+// Cambios de página: copia en memoria + caché en localStorage (si la cuota se llena, la página igual funciona)
+const changesMem = {};
+const setPageChanges = (id, data) => {
+  changesMem[id] = data;
+  try { localStorage.setItem(`miri_changes_${id}`, JSON.stringify(data)); }
+  catch (e) { console.warn("Caché local lleno; se usa solo memoria para", id); }
+};
+const getPageChanges = (id) => {
+  if (changesMem[id]) return changesMem[id];
+  try { return JSON.parse(localStorage.getItem(`miri_changes_${id}`) || "null"); } catch (e) { return null; }
+};
+
+const revealPage = () => { document.body.style.opacity = "1"; };
+setTimeout(revealPage, 4000);
+
+const escapeHtml = (value) => String(value ?? "").replace(/[&<>"']/g, (c) => (
+  { "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;", "'": "&#39;" }[c]
+));
+
+const withTimeout = (promise, ms) => Promise.race([promise, new Promise((resolve) => setTimeout(() => resolve(null), ms))]);
+
+const cloudFetch = async (table, query = "select=*") => {
   if (!isCloudEnabled()) return null;
   try {
-    const response = await fetch(`${SUPABASE_URL}/rest/v1/${table}?select=*`, {
-      headers: { "apikey": SUPABASE_KEY, "Authorization": `Bearer ${SUPABASE_KEY}` }
+    const response = await fetch(`${SUPABASE_URL}/rest/v1/${table}?${query}`, {
+      headers: { "apikey": SUPABASE_KEY, "Authorization": `Bearer ${SUPABASE_KEY}` },
+      cache: "no-store"
     });
     return response.ok ? await response.json() : null;
   } catch (e) { return null; }
@@ -214,42 +288,44 @@ const getElementPath = (el) => {
 // --- Carga Inicial de Datos desde miri_data.json (GitHub Fallback) ---
 const loadInitialData = async () => {
   try {
-    const response = await fetch('miri_data.json');
+    // Respaldo: solo se usa cuando la nube no responde y solo rellena lo que NO existe en el caché local.
+    // Nunca pisa datos más nuevos (antes el JSON viejo pisaba el caché y 3 seg después la nube lo corregía).
+    const response = await fetch('miri_data.json', { cache: "no-store" });
     if (!response.ok) return;
     const data = await response.json();
-    
-    console.log("Cargando datos desde miri_data.json...");
-    
-    // Aplicar config si no hay cambios locales más recientes
+
+    console.log("Cargando respaldo desde miri_data.json...");
+
     if (data.config) {
-      if (!localStorage.getItem("miri_wa_number")) {
+      if (!localStorage.getItem("miri_wa_number") && data.config.wa) {
         localStorage.setItem("miri_wa_number", data.config.wa);
         WHATSAPP_NUMBER = data.config.wa;
       }
-      if (!localStorage.getItem("miri_mp_link")) {
+      if (!localStorage.getItem("miri_mp_link") && data.config.mp) {
         localStorage.setItem("miri_mp_link", data.config.mp);
         BANK_ALIAS = data.config.mp;
       }
-      // La config del JSON actúa como fuente central para todos los dispositivos
-      if (data.config.supabase_url) {
+      if (!localStorage.getItem("miri_supabase_url") && data.config.supabase_url) {
         localStorage.setItem("miri_supabase_url", data.config.supabase_url);
         SUPABASE_URL = data.config.supabase_url;
       }
-      if (data.config.supabase_key) {
+      if (!localStorage.getItem("miri_supabase_key") && data.config.supabase_key) {
         localStorage.setItem("miri_supabase_key", data.config.supabase_key);
         SUPABASE_KEY = data.config.supabase_key;
       }
     }
 
-    // Aplicar horarios prioritarios desde el JSON si existen
     if (data.schedule) {
-      if (data.schedule.slots) {
+      if (data.schedule.slots && !localStorage.getItem("miri_work_slots")) {
         localStorage.setItem("miri_work_slots", JSON.stringify(data.schedule.slots));
         WORK_SLOTS = data.schedule.slots;
       }
-      if (data.schedule.custom_days) {
+      if (data.schedule.custom_days && !localStorage.getItem("miri_custom_days")) {
         localStorage.setItem("miri_custom_days", JSON.stringify(data.schedule.custom_days));
         CUSTOM_WORK_DAYS = data.schedule.custom_days;
+      }
+      if (!localStorage.getItem("miri_closed_months") && (data.schedule.closed_months || data.schedule.unlocked_days)) {
+        applyScheduleData({ closed_months: data.schedule.closed_months, unlocked_days: data.schedule.unlocked_days, closed_default: data.schedule.closed_default });
       }
     }
 
@@ -289,108 +365,167 @@ const loadInitialData = async () => {
     if (data.changes) {
       Object.keys(data.changes).forEach(page => {
         const key = `miri_changes_${page}`;
-        // Prioridad total a los cambios del JSON (GitHub) sobre los locales
-        localStorage.setItem(key, JSON.stringify(data.changes[page]));
+        if (!localStorage.getItem(key)) localStorage.setItem(key, JSON.stringify(data.changes[page]));
       });
     }
 
-    // Refrescar UI
-    applySavedChanges();
-    if (currentPage === "reservar" && window.__miriRenderCal) window.__miriRenderCal();
-    
   } catch (e) {
     console.warn("No se pudo cargar miri_data.json o el archivo no existe.");
   }
 };
 let adminCommandString = "";
 let adminOverlay = null;
+let adminBookingFilter = "upcoming";
+
+const adminToast = (msg) => {
+  if (!adminOverlay) return;
+  let el = document.getElementById("adminToast");
+  if (!el) { el = document.createElement("div"); el.id = "adminToast"; el.className = "admin-toast"; adminOverlay.appendChild(el); }
+  el.textContent = msg;
+  el.classList.add("show");
+  clearTimeout(el._h);
+  el._h = setTimeout(() => el.classList.remove("show"), 2200);
+};
 
 const injectAdminUI = () => {
   if (document.getElementById("adminOverlay")) return;
   const html = `
     <div class="admin-overlay" id="adminOverlay">
-      <div class="admin-modal">
-        <span class="admin-close" id="adminClose">&times;</span>
-        <h2>MiriAdmin Panel</h2>
-        <div style="display:flex; gap:10px; flex-wrap:wrap; margin-bottom: 2rem;">
-          <button class="button button-secondary" id="adminJumpGeneral" style="min-height:44px; padding:0.6rem 1rem;">General</button>
-          <button class="button button-secondary" id="adminJumpSchedule" style="min-height:44px; padding:0.6rem 1rem;">Horarios</button>
-          <button class="button button-secondary" id="adminJumpBookings" style="min-height:44px; padding:0.6rem 1rem;">Turnos</button>
-        </div>
-        <div class="admin-section">
-          <h3>Nube Automática (Supabase)</h3>
-          <p style="font-size:0.85rem; color:#666; margin-bottom:10px;">Pega tu "Anon Public Key" (la que empieza con <b>eyJ</b>) para que todo se guarde solo.</p>
-          <div class="admin-grid">
-            <div class="admin-field"><label>URL</label><input type="text" id="adminSupabaseUrl"></div>
-            <div class="admin-field"><label>Key (Anon Key)</label><input type="text" id="adminSupabaseKey"></div>
+      <div class="admin-modal" role="dialog" aria-label="Panel de administración">
+        <header class="admin-head">
+          <div>
+            <span class="admin-kicker">Panel de administración</span>
+            <h2>Hola, Miri</h2>
           </div>
-          <button class="button button-primary" id="adminSaveCloudConfig" style="margin-top:10px; background:#4a5568;">Activar Nube</button>
-        </div>
-        <div class="admin-section">
-          <h3>Configuración Manual</h3>
-          <div style="display:flex; gap:10px; flex-wrap:wrap;">
-            <button class="button button-secondary" id="adminDownloadChanges" style="background:#d98aa7; color:white;">1. Descargar JSON</button>
-            <button class="button button-secondary" id="adminSyncFromCloud" style="color:#d98aa7;">Sincronizar Nube</button>
-            <button class="button" id="adminResetLocal" style="background:#e53e3e; color:white;">Borrar TODO</button>
-          </div>
-        </div>
-        <div class="admin-section">
-          <h3>Edición Visual</h3>
-          <button class="button button-primary btn-save-all" id="adminEnableEdit">Activar Modo Edición</button>
-        </div>
-        <div class="admin-section" id="adminSectionGeneral">
-          <h3>General</h3>
-          <div class="admin-grid">
-            <div class="admin-field"><label>WhatsApp</label><input type="text" id="adminWaNumber"></div>
-            <div class="admin-field"><label>Alias Transferencia</label><input type="text" id="adminMpLink"></div>
-          </div>
-          <button class="button button-primary btn-save-all" id="adminSaveConfig">Guardar</button>
-        </div>
-        <div class="admin-section" id="adminSectionSlots">
-          <h3>Horarios de Trabajo (Generales)</h3>
-          <p style="font-size:0.85rem; color:#666; margin-bottom:10px;">Escribe los horarios separados por coma (ej: 09:00, 10:30, 14:00).</p>
-          <div class="admin-grid">
-            <div class="admin-field">
-              <label>Estudio</label>
-              <select id="adminWorkSlotStudio">
-                <option value="Monserrat">Monserrat</option>
-                <option value="José Marmol">José Marmol</option>
-              </select>
+          <button class="admin-close" id="adminClose" type="button" aria-label="Cerrar panel">&times;</button>
+        </header>
+
+        <nav class="admin-tabs" role="tablist">
+          <button class="admin-tab active" type="button" data-tab="turnos"><span>Turnos</span></button>
+          <button class="admin-tab" type="button" data-tab="dias"><span>Días</span></button>
+          <button class="admin-tab" type="button" data-tab="horarios"><span>Horarios</span></button>
+          <button class="admin-tab" type="button" data-tab="pagina"><span>Página</span></button>
+          <button class="admin-tab" type="button" data-tab="ajustes"><span>Ajustes</span></button>
+        </nav>
+
+        <div class="admin-body">
+
+          <!-- TURNOS -->
+          <section class="admin-pane active" data-pane="turnos">
+            <div class="admin-stats" id="adminStats"></div>
+            <div class="admin-segment" role="group" aria-label="Filtrar turnos">
+              <button type="button" class="active" id="adminFilterUpcoming">Próximos</button>
+              <button type="button" id="adminFilterAll">Todos</button>
             </div>
-            <div class="admin-field">
-              <label>Horarios (coma)</label>
-              <input type="text" id="adminWorkSlots" placeholder="09:00, 10:00, 11:00...">
+            <div class="admin-bookings" id="adminBookingsTable"></div>
+          </section>
+
+          <!-- DÍAS -->
+          <section class="admin-pane" data-pane="dias">
+            <div class="admin-card">
+              <h3>Calendario</h3>
+              <p class="admin-hint">Tocá un día para ver o cambiar sus horarios. Los días con puntito dorado tienen horarios especiales.</p>
+              <div class="calendar-wrapper admin-cal">
+                <div class="calendar-header">
+                  <button id="adminSchedulePrev" type="button" aria-label="Mes anterior">&lt;</button>
+                  <h2 id="adminScheduleMonth">Mes Año</h2>
+                  <button id="adminScheduleNext" type="button" aria-label="Mes siguiente">&gt;</button>
+                </div>
+                <div class="calendar-grid" id="adminScheduleGrid"></div>
+              </div>
             </div>
-          </div>
-          <button class="button button-primary" id="adminSaveSlots" style="margin-top:10px; background:#d98aa7;">Actualizar Horarios Generales</button>
-        </div>
-        <div class="admin-section">
-          <h3>Horarios por Día (Calendario)</h3>
-          <p style="font-size:0.85rem; color:#666; margin-bottom:10px;">Elegí un día en el calendario y definí sus horarios. Si dejás vacío, ese día usa los horarios generales.</p>
-          <div class="calendar-wrapper" style="padding: 1.5rem; margin-bottom: 1.5rem;">
-            <div class="calendar-header">
-              <button id="adminSchedulePrev">&lt;</button>
-              <h2 id="adminScheduleMonth">Mes Año</h2>
-              <button id="adminScheduleNext">&gt;</button>
+
+            <div class="admin-card">
+              <h3>Abrir o cerrar turnos</h3>
+              <div class="admin-lock-panel">
+                <p id="adminLockStatus" class="admin-lock-status"></p>
+                <div class="admin-lock-actions">
+                  <button class="button button-primary" id="adminCloseMonth" type="button">Cerrar todos los turnos del mes</button>
+                  <button class="button button-secondary" id="adminOpenMonth" type="button">Abrir mes completo</button>
+                  <button class="button button-secondary" id="adminToggleDay" type="button">Desbloquear día seleccionado</button>
+                  <button class="button button-secondary" id="adminToggleDefault" type="button">Cerrar todos los meses por defecto</button>
+                </div>
+                <p class="admin-lock-help">Con el mes cerrado, las clientas no pueden reservar ningún día. Elegí un día en el calendario y tocá "Desbloquear" para habilitarlo.</p>
+              </div>
             </div>
-            <div class="calendar-grid" id="adminScheduleGrid"></div>
-          </div>
-          <div class="admin-grid">
-            <div class="admin-field">
-              <label>Estudio</label>
-              <select id="adminCustomSlotStudio">
-                <option value="Monserrat">Monserrat</option>
-                <option value="José Marmol">José Marmol</option>
-              </select>
+
+            <div class="admin-card">
+              <h3>Horarios de este día</h3>
+              <p class="admin-hint">Escribí los horarios separados por coma. Si lo dejás vacío, se usan los horarios de siempre. Para cerrar solo este día escribí: <b>Sin horarios</b>.</p>
+              <div class="admin-grid">
+                <div class="admin-field">
+                  <label for="adminCustomSlotStudio">Estudio</label>
+                  <select id="adminCustomSlotStudio">
+                    <option value="Monserrat">Monserrat</option>
+                    <option value="José Marmol">José Marmol</option>
+                  </select>
+                </div>
+                <div class="admin-field"><label for="adminCustomDate">Día elegido</label><input type="date" id="adminCustomDate"></div>
+                <div class="admin-field admin-span"><label for="adminCustomSlots">Horarios</label><input type="text" id="adminCustomSlots" placeholder="Ej: 10:00, 11:00, 12:30"></div>
+              </div>
+              <button class="button button-primary admin-save" id="adminSaveCustomDay" type="button">Guardar horarios del día</button>
             </div>
-            <div class="admin-field"><label>Fecha seleccionada</label><input type="date" id="adminCustomDate"></div>
-            <div class="admin-field" style="grid-column: span 2;"><label>Horarios (coma)</label><input type="text" id="adminCustomSlots" placeholder="Ej: 10:00, 11:00, 12:30"></div>
-          </div>
-          <button class="button button-primary" id="adminSaveCustomDay" style="margin-top:10px; background:#4a5568;">Guardar Horarios del Día</button>
-        </div>
-        <div class="admin-section" id="adminSectionBookings">
-          <h3>Turnos</h3>
-          <div class="admin-table-wrapper"><table class="admin-table" id="adminBookingsTable"></table></div>
+          </section>
+
+          <!-- HORARIOS -->
+          <section class="admin-pane" data-pane="horarios">
+            <div class="admin-card">
+              <h3>Horarios de siempre</h3>
+              <p class="admin-hint">Son los horarios que se ofrecen todos los días, salvo los que cambies en la pestaña Días. Escribilos separados por coma (ej: 09:00, 10:30, 14:00).</p>
+              <div class="admin-grid">
+                <div class="admin-field">
+                  <label for="adminWorkSlotStudio">Estudio</label>
+                  <select id="adminWorkSlotStudio">
+                    <option value="Monserrat">Monserrat</option>
+                    <option value="José Marmol">José Marmol</option>
+                  </select>
+                </div>
+                <div class="admin-field">
+                  <label for="adminWorkSlots">Horarios</label>
+                  <input type="text" id="adminWorkSlots" placeholder="09:00, 10:00, 11:00...">
+                </div>
+              </div>
+              <button class="button button-primary admin-save" id="adminSaveSlots" type="button">Guardar horarios</button>
+            </div>
+          </section>
+
+          <!-- PÁGINA -->
+          <section class="admin-pane" data-pane="pagina">
+            <div class="admin-card">
+              <h3>Editar la página</h3>
+              <p class="admin-hint">Cambiá textos, precios y fotos directamente sobre la página. Tocá lo que quieras modificar, escribí y después apretá <b>Guardar</b> arriba.</p>
+              <button class="button button-primary admin-save" id="adminEnableEdit" type="button">Activar modo edición</button>
+            </div>
+          </section>
+
+          <!-- AJUSTES -->
+          <section class="admin-pane" data-pane="ajustes">
+            <div class="admin-card">
+              <h3>Datos de contacto</h3>
+              <div class="admin-grid">
+                <div class="admin-field"><label for="adminWaNumber">WhatsApp</label><input type="text" id="adminWaNumber" inputmode="tel"></div>
+                <div class="admin-field"><label for="adminMpLink">Alias para transferencias</label><input type="text" id="adminMpLink"></div>
+              </div>
+              <button class="button button-primary admin-save" id="adminSaveConfig" type="button">Guardar</button>
+            </div>
+
+            <details class="admin-card admin-advanced">
+              <summary>Opciones avanzadas</summary>
+              <p class="admin-hint">Solo para uso técnico. No hace falta tocar esto en el día a día.</p>
+              <div class="admin-lock-actions">
+                <button class="button button-secondary" id="adminSyncFromCloud" type="button">Actualizar desde la nube</button>
+                <button class="button button-secondary" id="adminDownloadChanges" type="button">Descargar copia de seguridad</button>
+                <button class="button admin-danger" id="adminResetLocal" type="button">Borrar datos de este dispositivo</button>
+              </div>
+              <h4 class="admin-sub">Conexión a la nube</h4>
+              <div class="admin-grid">
+                <div class="admin-field"><label for="adminSupabaseUrl">URL</label><input type="text" id="adminSupabaseUrl"></div>
+                <div class="admin-field"><label for="adminSupabaseKey">Clave pública</label><input type="text" id="adminSupabaseKey"></div>
+              </div>
+              <button class="button button-secondary admin-save" id="adminSaveCloudConfig" type="button">Guardar conexión</button>
+            </details>
+          </section>
+
         </div>
       </div>
     </div>
@@ -398,9 +533,16 @@ const injectAdminUI = () => {
   document.body.insertAdjacentHTML('beforeend', html);
   adminOverlay = document.getElementById("adminOverlay");
   document.getElementById("adminClose").onclick = () => adminOverlay.style.display = "none";
-  document.getElementById("adminJumpGeneral").onclick = () => document.getElementById("adminSectionGeneral")?.scrollIntoView({behavior: "smooth", block: "start"});
-  document.getElementById("adminJumpSchedule").onclick = () => document.getElementById("adminSectionSlots")?.scrollIntoView({behavior: "smooth", block: "start"});
-  document.getElementById("adminJumpBookings").onclick = () => document.getElementById("adminSectionBookings")?.scrollIntoView({behavior: "smooth", block: "start"});
+  const setAdminTab = (name) => {
+    adminOverlay.querySelectorAll(".admin-tab").forEach(b => b.classList.toggle("active", b.dataset.tab === name));
+    adminOverlay.querySelectorAll(".admin-pane").forEach(p => p.classList.toggle("active", p.dataset.pane === name));
+    if (name === "turnos") renderAdminBookings();
+    adminOverlay.querySelector(".admin-body").scrollTop = 0;
+  };
+  adminOverlay.querySelectorAll(".admin-tab").forEach(b => b.onclick = () => setAdminTab(b.dataset.tab));
+  adminOverlay.addEventListener("click", (e) => { if (e.target === adminOverlay) adminOverlay.style.display = "none"; });
+  document.getElementById("adminFilterUpcoming").onclick = () => { adminBookingFilter = "upcoming"; renderAdminBookings(); };
+  document.getElementById("adminFilterAll").onclick = () => { adminBookingFilter = "all"; renderAdminBookings(); };
   document.getElementById("adminEnableEdit").onclick = () => { adminOverlay.style.display = "none"; enableVisualEditing(); };
   document.getElementById("adminSaveCloudConfig").onclick = () => {
     localStorage.setItem("miri_supabase_url", document.getElementById("adminSupabaseUrl").value.trim());
@@ -432,7 +574,7 @@ const injectAdminUI = () => {
         btn.style.background = "#48bb78";
         
         if(isCloudEnabled()) {
-          cloudUpsert("page_changes", {id:"schedule", data:{slots: WORK_SLOTS, custom_days: CUSTOM_WORK_DAYS}}).then(ok => {
+          cloudUpsert("page_changes", {id:"schedule", data:getSchedulePayload()}).then(ok => {
             setTimeout(() => { btn.textContent = oldText; btn.style.background = "#d98aa7"; }, 2000);
             if(!ok) alert("Error al guardar en la nube, pero quedó localmente.");
           });
@@ -476,7 +618,7 @@ const injectAdminUI = () => {
     renderScheduleCal(); // Refrescar el mini-calendario del admin
 
     if(isCloudEnabled()) {
-      cloudUpsert("page_changes", {id:"schedule", data:{slots: WORK_SLOTS, custom_days: CUSTOM_WORK_DAYS}}).then(ok => {
+      cloudUpsert("page_changes", {id:"schedule", data:getSchedulePayload()}).then(ok => {
         setTimeout(() => { btn.textContent = oldText; btn.style.background = "#4a5568"; }, 2000);
         if(!ok) alert("Error al guardar en la nube.");
       });
@@ -493,10 +635,7 @@ const injectAdminUI = () => {
         supabase_key: SUPABASE_KEY
       }, 
       bookings: JSON.parse(localStorage.getItem("bookedSlots") || "{}"), 
-      schedule: {
-        slots: WORK_SLOTS,
-        custom_days: CUSTOM_WORK_DAYS
-      },
+      schedule: getSchedulePayload(),
       changes: {} 
     };
     ['inicio', 'servicios', 'galeria', 'opiniones', 'contacto', 'reservar', 'global'].forEach(p => { 
@@ -539,11 +678,12 @@ const injectAdminUI = () => {
     const studioSlots = custom ? custom[studio] : null;
     slotsInput.value = Array.isArray(studioSlots) ? studioSlots.join(", ") : "";
     renderScheduleCal();
+    if (typeof refreshLockUI === "function") refreshLockUI();
   };
 
   document.getElementById("adminWorkSlotStudio").onchange = () => {
     const studio = document.getElementById("adminWorkSlotStudio").value;
-    document.getElementById("adminWorkSlots").value = WORK_SLOTS[studio].join(", ");
+    document.getElementById("adminWorkSlots").value = (WORK_SLOTS[studio] || []).join(", ");
   };
 
   document.getElementById("adminCustomSlotStudio").onchange = () => {
@@ -571,13 +711,73 @@ const injectAdminUI = () => {
         indicator.innerHTML = '<span class="dot-indicator" style="background: var(--gold);"></span>';
         cell.appendChild(indicator);
       }
+      if (isMonthClosed(date)) cell.classList.add(UNLOCKED_DAYS[key] ? "day-unlocked" : "day-locked");
       cell.onclick = () => selectDay(date);
       grid.appendChild(cell);
     }
   };
 
-  document.getElementById("adminSchedulePrev").onclick = () => { curr.setMonth(curr.getMonth()-1); renderScheduleCal(); };
-  document.getElementById("adminScheduleNext").onclick = () => { curr.setMonth(curr.getMonth()+1); renderScheduleCal(); };
+  const lockStatusEl = document.getElementById("adminLockStatus");
+  const monthLabel = () => new Intl.DateTimeFormat("es-ES", {month: "long", year: "numeric"}).format(curr);
+
+  const refreshLockUI = () => {
+    const closed = isMonthClosed(curr);
+    const unlockedCount = Object.keys(UNLOCKED_DAYS).filter(k => { const [, m, y] = k.split("/").map(Number); return m === curr.getMonth() + 1 && y === curr.getFullYear(); }).length;
+    lockStatusEl.textContent = closed
+      ? `${monthLabel()}: CERRADO (${unlockedCount} día${unlockedCount === 1 ? "" : "s"} desbloqueado${unlockedCount === 1 ? "" : "s"})`
+      : `${monthLabel()}: ABIERTO (todos los días con horarios se pueden reservar)`;
+    lockStatusEl.classList.toggle("is-closed", closed);
+    document.getElementById("adminCloseMonth").disabled = closed;
+    document.getElementById("adminOpenMonth").disabled = !closed;
+    const toggleDay = document.getElementById("adminToggleDay");
+    toggleDay.disabled = !closed || !selected;
+    toggleDay.textContent = selected && UNLOCKED_DAYS[toKey(selected)] ? "Volver a bloquear día seleccionado" : "Desbloquear día seleccionado";
+    document.getElementById("adminToggleDefault").textContent = CLOSED_DEFAULT ? "Dejar los meses abiertos por defecto" : "Cerrar todos los meses por defecto";
+  };
+
+  const saveLockState = async () => {
+    persistLockState();
+    renderScheduleCal();
+    refreshLockUI();
+    if (isCloudEnabled()) {
+      const ok = await cloudUpsert("page_changes", {id: "schedule", data: getSchedulePayload()});
+      if (!ok) alert("Error al guardar en la nube, pero quedó guardado localmente.");
+      else adminToast("Cambios guardados");
+    } else adminToast("Guardado en este dispositivo");
+  };
+
+  const clearUnlockedOfMonth = () => {
+    Object.keys(UNLOCKED_DAYS).forEach(k => { const [, m, y] = k.split("/").map(Number); if (m === curr.getMonth() + 1 && y === curr.getFullYear()) delete UNLOCKED_DAYS[k]; });
+  };
+
+  document.getElementById("adminCloseMonth").onclick = () => {
+    if (!confirm(`¿Cerrar TODOS los turnos de ${monthLabel()}? Las clientas no podrán reservar hasta que desbloquees días.`)) return;
+    CLOSED_MONTHS[monthKeyOf(curr)] = true;
+    clearUnlockedOfMonth();
+    saveLockState();
+  };
+  document.getElementById("adminOpenMonth").onclick = () => {
+    CLOSED_MONTHS[monthKeyOf(curr)] = false;
+    clearUnlockedOfMonth();
+    saveLockState();
+  };
+  document.getElementById("adminToggleDay").onclick = () => {
+    if (!selected) return;
+    const k = toKey(selected);
+    if (UNLOCKED_DAYS[k]) delete UNLOCKED_DAYS[k]; else UNLOCKED_DAYS[k] = true;
+    saveLockState();
+  };
+  document.getElementById("adminToggleDefault").onclick = () => {
+    const msg = CLOSED_DEFAULT
+      ? "¿Dejar los meses abiertos por defecto?"
+      : "¿Cerrar TODOS los meses por defecto? Solo se podrá reservar en los meses que abras y en los días que desbloquees.";
+    if (!confirm(msg)) return;
+    CLOSED_DEFAULT = !CLOSED_DEFAULT;
+    saveLockState();
+  };
+
+  document.getElementById("adminSchedulePrev").onclick = () => { curr.setMonth(curr.getMonth()-1); renderScheduleCal(); refreshLockUI(); };
+  document.getElementById("adminScheduleNext").onclick = () => { curr.setMonth(curr.getMonth()+1); renderScheduleCal(); refreshLockUI(); };
   renderScheduleCal();
   selectDay(new Date());
 };
@@ -696,6 +896,7 @@ if(currentPage === "reservar") {
     for(let i=1; i<=last; i++) {
       const d = document.createElement("div"); d.className="calendar-day"; d.textContent=i;
       const dObj = new Date(curr.getFullYear(), curr.getMonth(), i);
+      d.dataset.dow = ["Dom", "Lun", "Mar", "Mié", "Jue", "Vie", "Sáb"][dObj.getDay()];
       const dStr = formatDate(dObj);
       const normD = normalizeDateStr(dStr);
       
@@ -719,6 +920,7 @@ if(currentPage === "reservar") {
 
       const isSunday = dObj.getDay() === 0;
       if(dObj < today || isSunday) d.classList.add("disabled");
+      else if(isDayLocked(dObj)) { d.classList.add("disabled", "locked"); d.title = "Día no disponible"; }
       else {
         if(dObj.getTime()===today.getTime()) d.classList.add("today");
         if(selD && dObj.toDateString()===selD.toDateString()) d.classList.add("selected");
@@ -732,6 +934,9 @@ if(currentPage === "reservar") {
       }
       grid.appendChild(d);
     }
+    // La tira de días se desplaza horizontalmente: llevar el día elegido (o hoy) al centro
+    const focusEl = grid.querySelector(".calendar-day.selected") || grid.querySelector(".calendar-day.today") || grid.querySelector(".calendar-day:not(.disabled):not(.empty)");
+    if (focusEl && grid.scrollWidth > grid.clientWidth) grid.scrollLeft = focusEl.offsetLeft - (grid.clientWidth - focusEl.offsetWidth) / 2;
     // Refrescar slots si ya hay un día seleccionado
     if (selD && selStudio) {
       renderSlots(formatDate(selD));
@@ -744,7 +949,7 @@ if(currentPage === "reservar") {
     const allBooked = JSON.parse(localStorage.getItem("bookedSlots") || "{}")[normD] || [];
     
     // Priorizar horarios específicos por fecha y estudio
-    let daySlots = WORK_SLOTS[selStudio];
+    let daySlots = WORK_SLOTS[selStudio] || DEFAULT_SLOTS;
     const custom = CUSTOM_WORK_DAYS[normD];
     if (custom) {
       if (Array.isArray(custom)) {
@@ -755,6 +960,24 @@ if(currentPage === "reservar") {
       }
     }
     
+    const [sd, sm, sy] = normD.split("/").map(Number);
+    if (isDayLocked(new Date(sy, sm - 1, sd))) {
+      const msg = document.createElement("p");
+      msg.textContent = "No hay horarios disponibles para este día.";
+      slotsGrid.appendChild(msg);
+      document.getElementById("bookingSummary").style.display = "none";
+      return;
+    }
+
+    // Días cerrados: el admin los marca con textos como "Sin horarios" / "sin turnos"; no deben ser reservables
+    if (!daySlots.length || daySlots.some(s => /^\s*sin\b/i.test(s))) {
+      const msg = document.createElement("p");
+      msg.textContent = "No hay horarios disponibles para este día.";
+      slotsGrid.appendChild(msg);
+      document.getElementById("bookingSummary").style.display = "none";
+      return;
+    }
+
     daySlots.forEach(t => {
       const b = document.createElement("button"); b.className="slot-button"; b.textContent=t;
       
@@ -781,6 +1004,18 @@ if(currentPage === "reservar") {
   };
 
   window.__miriRenderCal = renderCal;
+
+  // Arrastrar la tira de días con el mouse (en pantallas táctiles ya se desliza con el dedo)
+  let dragStartX = 0, dragStartScroll = 0, dragMoved = false, dragging = false;
+  grid.addEventListener("mousedown", (e) => { dragging = true; dragMoved = false; dragStartX = e.pageX; dragStartScroll = grid.scrollLeft; });
+  window.addEventListener("mousemove", (e) => {
+    if (!dragging) return;
+    const dx = e.pageX - dragStartX;
+    if (Math.abs(dx) > 5) { dragMoved = true; grid.classList.add("dragging"); }
+    if (dragMoved) grid.scrollLeft = dragStartScroll - dx;
+  });
+  window.addEventListener("mouseup", () => { dragging = false; setTimeout(() => grid.classList.remove("dragging"), 0); });
+  grid.addEventListener("click", (e) => { if (dragMoved) { e.stopPropagation(); e.preventDefault(); dragMoved = false; } }, true);
 
   document.getElementById("prevMonth").onclick = () => { curr.setMonth(curr.getMonth()-1); renderCal(); };
   document.getElementById("nextMonth").onclick = () => { curr.setMonth(curr.getMonth()+1); renderCal(); };
@@ -828,6 +1063,32 @@ if(currentPage === "reservar") {
     const oldText = btn.textContent;
     btn.disabled = true;
     btn.textContent = "Procesando...";
+
+    // Datos frescos de horarios/bloqueos: Miri pudo cerrar el día mientras la clienta completaba el formulario
+    if(isCloudEnabled()) await syncScheduleFromCloud();
+    if (isDayLocked(selD)) {
+      alert("Este día ya no está disponible. Por favor, elegí otra fecha.");
+      btn.disabled = false;
+      btn.textContent = oldText;
+      selD = null; selT = null;
+      document.getElementById("slotsContainer").style.display = "none";
+      document.getElementById("bookingSummary").style.display = "none";
+      if (window.__miriRenderCal) window.__miriRenderCal();
+      return;
+    }
+
+    // Verificación en la nube: evita pisar un turno que otra persona reservó desde otro dispositivo
+    if(isCloudEnabled()) {
+      const cloudId = getBookingCloudId(normalizeDateStr(dStr), selT, selStudio);
+      const existing = await cloudFetch("bookings", `select=id&id=eq.${encodeURIComponent(cloudId)}`);
+      if (existing && existing.length > 0) {
+        alert("Lo sentimos, este turno acaba de ser reservado. Por favor, selecciona otro horario.");
+        btn.disabled = false;
+        btn.textContent = oldText;
+        await syncBookingsFromCloud();
+        return;
+      }
+    }
 
     // 1. Guardado Local
     const createdAt = new Date().toISOString();
@@ -938,7 +1199,7 @@ const enableVisualEditing = () => {
   
   // Textos editables
   document.querySelectorAll('p, h1, h2, h3, span, strong, small, figcaption, .eyebrow, .button:not([href]), .service-card h3, .service-price, .price-list p, .price-list strong').forEach(el => { 
-    if(!el.closest('.admin-overlay') && !el.closest('.nav') && !el.classList.contains('menu-toggle')) {
+    if(!el.closest('.admin-overlay') && !el.closest('.admin-alert') && !el.closest('.calendar-grid') && !el.closest('.tabbar') && !el.closest('.nav') && !el.classList.contains('menu-toggle')) {
       el.contentEditable = "true";
       el.setAttribute('spellcheck', 'false');
     }
@@ -968,17 +1229,20 @@ const enableVisualEditing = () => {
             const canvas = document.createElement('canvas');
             let width = img.width;
             let height = img.height;
-            const MAX_SIZE = 800; // Tamaño máximo para optimizar
+            const MAX_SIZE = 1600; // Alta definición (antes 800px, se veía pixelado)
             if (width > height) {
               if (width > MAX_SIZE) { height *= MAX_SIZE / width; width = MAX_SIZE; }
             } else {
               if (height > MAX_SIZE) { width *= MAX_SIZE / height; height = MAX_SIZE; }
             }
             canvas.width = width; canvas.height = height;
-            canvas.getContext('2d').drawImage(img, 0, 0, width, height);
+            const ctx = canvas.getContext('2d');
+            ctx.imageSmoothingEnabled = true;
+            ctx.imageSmoothingQuality = 'high';
+            ctx.drawImage(img, 0, 0, width, height);
             
             // Convertir a texto (Base64) para guardar en Supabase
-            const base64 = canvas.toDataURL('image/jpeg', 0.6);
+            const base64 = canvas.toDataURL('image/jpeg', 0.82);
             if (el.tagName === 'IMG') el.src = base64;
             else el.style.backgroundImage = `url("${base64}")`;
           };
@@ -1027,7 +1291,7 @@ const saveAllChanges = async () => {
   });
 
   console.log("Guardando cambios para:", pId, changes);
-  localStorage.setItem(`miri_changes_${pId}`, JSON.stringify(changes));
+  setPageChanges(pId, changes);
   if(isCloudEnabled()) {
     const res = await cloudUpsert("page_changes", {id:pId, data:changes});
     if(res) alert("¡Cambios guardados con éxito en la nube!");
@@ -1043,12 +1307,8 @@ const applySavedChanges = () => {
   if (displayNum) displayNum.textContent = `+${WHATSAPP_NUMBER}`;
 
   const isEditing = document.body.classList.contains('editing-mode');
-  const s = localStorage.getItem(`miri_changes_${currentPage || 'global'}`); if(!s) {
-    // Si no hay cambios locales, mostrar la página (por si estaba oculta)
-    document.body.style.opacity = "1";
-    return;
-  }
-  const d = JSON.parse(s); 
+  const d = getPageChanges(currentPage || 'global');
+  if(!d) return;
   
   if (d.texts) Object.keys(d.texts).forEach(p => { 
     const el = document.querySelector(p); 
@@ -1093,167 +1353,197 @@ const applySavedChanges = () => {
       }
     }
   });
-  
-  // Una vez aplicados los cambios, mostramos el cuerpo de la página
-  document.body.style.opacity = "1";
 };
 
-const syncWithCloud = (manual = false) => {
-  if(isCloudEnabled()) {
-    cloudFetch("bookings").then(d => { 
-      if(d) { 
-        console.log(`Sincronizando ${d.length} turnos desde la nube...`);
-        const pendingCloudBookings = loadPendingCloudBookings();
-        const cloudBookings = {}; 
-        
-        d.forEach(b => { 
-          const normalizedDate = normalizeDateStr(b.date);
-          const cloudMeta = decodeBookingCloudMeta(b.service, b.id);
-          if(!cloudBookings[normalizedDate]) cloudBookings[normalizedDate]=[]; 
-          cloudBookings[normalizedDate].push({
-            time: b.time,
-            studio: cloudMeta.studio,
-            name: cloudMeta.name,
-            service: cloudMeta.service,
-            created_at: cloudMeta.created_at
-          }); 
-        }); 
+const syncBookingsFromCloud = async () => {
+  const d = await cloudFetch("bookings");
+  if (!d) return false;
+  console.log(`Sincronizando ${d.length} turnos desde la nube...`);
+  const pendingCloudBookings = loadPendingCloudBookings();
+  const cloudBookings = {};
 
-        // La nube es la fuente principal; solo mantenemos pendientes locales que aún no sincronizaron
-        const mergedBookings = { ...cloudBookings };
-        pendingCloudBookings.forEach(pending => {
-          const pendingDate = normalizeDateStr(pending.date);
-          if (!mergedBookings[pendingDate]) mergedBookings[pendingDate] = [];
-          const alreadyInMerged = mergedBookings[pendingDate].some(item =>
-            item.time === pending.time && isSameStudio(item.studio, pending.studio)
-          );
-          if (!alreadyInMerged) {
-            mergedBookings[pendingDate].push({
-              time: pending.time,
-              studio: pending.studio,
-              name: pending.name || "-",
-              service: pending.service || null,
-              created_at: pending.created_at || null
-            });
-          }
-        });
+  d.forEach(b => {
+    const normalizedDate = normalizeDateStr(b.date);
+    const cloudMeta = decodeBookingCloudMeta(b.service, b.id);
+    if (!cloudBookings[normalizedDate]) cloudBookings[normalizedDate] = [];
+    cloudBookings[normalizedDate].push({
+      time: b.time,
+      studio: cloudMeta.studio,
+      name: cloudMeta.name,
+      service: cloudMeta.service,
+      created_at: cloudMeta.created_at
+    });
+  });
 
-        localStorage.setItem("bookedSlots", JSON.stringify(mergedBookings)); 
-        if(currentPage==="reservar" && window.__miriRenderCal) window.__miriRenderCal(); 
-        
-        // Si el panel de admin está abierto, refrescar su tabla
-        if (adminOverlay && adminOverlay.style.display === "flex") {
-          renderAdminBookings();
-        }
-      } 
-    });
-    cloudFetch("config").then(d => { 
-      if(d && d[0]) { 
-        localStorage.setItem("miri_wa_number", d[0].wa); 
-        localStorage.setItem("miri_mp_link", d[0].mp); 
-        WHATSAPP_NUMBER = d[0].wa;
-        BANK_ALIAS = d[0].mp;
-        
-        // Actualizar UI si existe el número en el contacto
-        const displayNum = document.getElementById("display-number");
-        if (displayNum) displayNum.textContent = `+${WHATSAPP_NUMBER}`;
-      } 
-    });
-    cloudFetch("page_changes").then(d => { 
-      if(d) {
-        d.forEach(i => {
-          if(i.id === "schedule") {
-            if(i.data && i.data.slots) {
-              let incomingSlots = i.data.slots;
-              // Compatibilidad
-              if (Array.isArray(incomingSlots)) {
-                incomingSlots = { "Monserrat": incomingSlots, "José Marmol": [...DEFAULT_SLOTS] };
-              }
-              localStorage.setItem("miri_work_slots", JSON.stringify(incomingSlots));
-              WORK_SLOTS = incomingSlots;
-            }
-            if(i.data && i.data.custom_days) {
-              localStorage.setItem("miri_custom_days", JSON.stringify(i.data.custom_days));
-              CUSTOM_WORK_DAYS = i.data.custom_days;
-            }
-            return;
-          }
-          localStorage.setItem(`miri_changes_${i.id}`, JSON.stringify(i.data));
-        });
-      }
-      applySavedChanges();
-      if(currentPage==="reservar" && window.__miriRenderCal) window.__miriRenderCal();
-    });
-    if(manual) alert("Sincronización completada");
-  } else if(manual) {
-    alert("La nube no está configurada.");
+  // La nube es la fuente principal; solo mantenemos pendientes locales que aún no sincronizaron
+  const mergedBookings = { ...cloudBookings };
+  pendingCloudBookings.forEach(pending => {
+    const pendingDate = normalizeDateStr(pending.date);
+    if (!mergedBookings[pendingDate]) mergedBookings[pendingDate] = [];
+    const alreadyInMerged = mergedBookings[pendingDate].some(item =>
+      item.time === pending.time && isSameStudio(item.studio, pending.studio)
+    );
+    if (!alreadyInMerged) {
+      mergedBookings[pendingDate].push({
+        time: pending.time,
+        studio: pending.studio,
+        name: pending.name || "-",
+        service: pending.service || null,
+        created_at: pending.created_at || null
+      });
+    }
+  });
+
+  localStorage.setItem("bookedSlots", JSON.stringify(mergedBookings));
+  if (currentPage === "reservar" && window.__miriRenderCal) window.__miriRenderCal();
+  if (adminOverlay && adminOverlay.style.display === "flex") renderAdminBookings();
+  return true;
+};
+
+const syncConfigFromCloud = async () => {
+  const d = await cloudFetch("config");
+  if (!(d && d[0])) return false;
+  localStorage.setItem("miri_wa_number", d[0].wa);
+  localStorage.setItem("miri_mp_link", d[0].mp);
+  WHATSAPP_NUMBER = d[0].wa;
+  BANK_ALIAS = d[0].mp;
+  const displayNum = document.getElementById("display-number");
+  if (displayNum) displayNum.textContent = `+${WHATSAPP_NUMBER}`;
+  return true;
+};
+
+// Solo baja las filas que necesita la página (antes bajaba TODAS, ~950 KB con imágenes, y por eso tardaba ~3 seg).
+// Solo la fila de horarios/bloqueos (liviana): para que los desbloqueos de Miri se vean sin recargar
+const syncScheduleFromCloud = async () => {
+  const d = await cloudFetch("page_changes", "select=*&id=eq.schedule");
+  if (!(d && d[0])) return false;
+  applyScheduleData(d[0].data);
+  if (currentPage === "reservar" && window.__miriRenderCal) window.__miriRenderCal();
+  return true;
+};
+
+const syncPageChangesFromCloud = async (all = false) => {
+  const ids = [...new Set([currentPage || "global", "global", "schedule"])];
+  const d = await cloudFetch("page_changes", all ? "select=*" : `select=*&id=in.(${ids.join(",")})`);
+  if (!d) return false;
+  d.forEach(i => {
+    if (i.id === "schedule") {
+      applyScheduleData(i.data);
+      return;
+    }
+    setPageChanges(i.id, i.data);
+  });
+  return true;
+};
+
+// Devuelve true si la nube respondió con los datos de la página. `timeout` (ms) limita cuánto se espera.
+const syncWithCloud = async (manual = false, { timeout = 0, all = false } = {}) => {
+  if (!isCloudEnabled()) {
+    if (manual) alert("La nube no está configurada.");
+    return false;
   }
+  const needsBookings = currentPage === "reservar" || (adminOverlay && adminOverlay.style.display === "flex");
+  const work = Promise.all([
+    syncPageChangesFromCloud(all || manual),
+    syncConfigFromCloud(),
+    needsBookings ? syncBookingsFromCloud() : Promise.resolve(true)
+  ]);
+  const results = timeout ? await withTimeout(work, timeout) : await work;
+  if (!results) return false;
+
+  applySavedChanges();
+  if (currentPage === "reservar" && window.__miriRenderCal) window.__miriRenderCal();
+  if (manual) alert("Sincronización completada");
+  return results[0];
 };
 
 const startCloudSyncPolling = () => {
   if (currentPage !== "reservar" || !isCloudEnabled() || cloudSyncIntervalId) return;
-  // Sincronización rápida para reflejar reservas hechas en otros dispositivos
-  cloudSyncIntervalId = setInterval(() => syncWithCloud(false), 5000);
+  // Solo turnos (liviano) y solo con la pestaña visible, para reflejar reservas de otros dispositivos
+  cloudSyncIntervalId = setInterval(() => {
+    if (document.visibilityState !== "visible") return;
+    syncBookingsFromCloud();
+    syncScheduleFromCloud();
+  }, 8000);
 };
 
+const parseBookingDate = (d) => { const [dd, mm, yy] = d.split("/").map(Number); return new Date(yy, mm - 1, dd); };
+const DOW_LONG = ["dom", "lun", "mar", "mié", "jue", "vie", "sáb"];
+
 const renderAdminBookings = () => {
-  const t = document.getElementById("adminBookingsTable"); if(!t) return;
-  
-  // Usar una estructura que se adapte mejor a móviles (cabecera oculta en móvil, filas como tarjetas)
-  t.innerHTML = `
-    <thead>
-      <tr>
-        <th>Fecha</th>
-        <th>Hora</th>
-        <th>Estudio</th>
-        <th>Cliente</th>
-        <th>Creado</th>
-        <th>Acción</th>
-      </tr>
-    </thead>
-    <tbody id="adminBookingsTableBody"></tbody>
-  `;
-  
-  const tbody = document.getElementById("adminBookingsTableBody");
-  const b = JSON.parse(localStorage.getItem("bookedSlots") || "{}"); 
-  
-  // Ordenar fechas para que las más recientes aparezcan arriba
-  const sortedDates = Object.keys(b).sort((a, b) => {
-    const [da, ma, ya] = a.split("/").map(Number);
-    const [db, mb, yb] = b.split("/").map(Number);
-    return new Date(yb, mb-1, db) - new Date(ya, ma-1, da);
+  const list = document.getElementById("adminBookingsTable"); if(!list) return;
+  const b = JSON.parse(localStorage.getItem("bookedSlots") || "{}");
+  const today = new Date(); today.setHours(0, 0, 0, 0);
+
+  // Aplanar y normalizar
+  const all = [];
+  Object.keys(b).forEach(d => {
+    (b[d] || []).filter(x => x !== null && x !== undefined).forEach(booking => {
+      const isObj = typeof booking === "object";
+      all.push({
+        d,
+        date: parseBookingDate(d),
+        time: isObj ? booking.time : booking,
+        studio: isObj ? (booking.studio || "Monserrat") : "Monserrat",
+        name: isObj ? (booking.name || "-") : "-",
+        service: isObj ? (booking.service || "") : "",
+        createdAt: isObj ? (booking.created_at || null) : null
+      });
+    });
   });
 
-  sortedDates.forEach(d => {
-    // Filtrar turnos vacíos o mal formados
-    const dayBookings = (b[d] || []).filter(item => item !== null && item !== undefined);
-    
-    dayBookings.forEach(booking => { 
-      const r = tbody.insertRow(); 
-      
-      const time = typeof booking === 'object' ? booking.time : booking;
-      const studio = typeof booking === 'object' ? (booking.studio || "Monserrat") : "Monserrat";
-      const clientName = typeof booking === 'object' ? (booking.name || "-") : "-";
-      const createdAt = typeof booking === 'object' ? (booking.created_at || null) : null;
-      
-      let creationStr = "-";
-      if (createdAt) {
-        const dateObj = new Date(createdAt);
-        creationStr = `${dateObj.getDate()}/${dateObj.getMonth()+1} ${dateObj.getHours()}:${String(dateObj.getMinutes()).padStart(2, '0')}`;
-      }
-      
-      const studioClass = isSameStudio(studio, "Monserrat") ? "monserrat" : "jose-marmol";
-      
-      // Añadimos data-label para el responsive CSS
-      r.innerHTML = `
-        <td data-label="Fecha">${d}</td>
-        <td data-label="Hora">${time}</td>
-        <td data-label="Estudio"><span class="studio-tag ${studioClass}">${studio}</span></td>
-        <td data-label="Cliente">${clientName}</td>
-        <td data-label="Creado"><small>${creationStr}</small></td>
-        <td data-label="Acción"><button class="button-release" onclick="releaseSlot('${d}','${time}','${studio}')">Liberar</button></td>
-      `; 
+  const upcoming = all.filter(x => x.date >= today);
+  const todayCount = all.filter(x => x.date.getTime() === today.getTime()).length;
+
+  const stats = document.getElementById("adminStats");
+  if (stats) stats.innerHTML = `
+    <div class="admin-stat"><strong>${todayCount}</strong><span>Hoy</span></div>
+    <div class="admin-stat"><strong>${upcoming.length}</strong><span>Próximos</span></div>
+    <div class="admin-stat"><strong>${all.length}</strong><span>En total</span></div>`;
+  document.getElementById("adminFilterUpcoming")?.classList.toggle("active", adminBookingFilter === "upcoming");
+  document.getElementById("adminFilterAll")?.classList.toggle("active", adminBookingFilter === "all");
+
+  const rows = (adminBookingFilter === "upcoming" ? upcoming : all)
+    .sort((x, y) => adminBookingFilter === "upcoming"
+      ? (x.date - y.date) || String(x.time).localeCompare(String(y.time))
+      : (y.date - x.date) || String(x.time).localeCompare(String(y.time)));
+
+  list.innerHTML = "";
+  if (!rows.length) {
+    list.innerHTML = `<div class="admin-empty">${adminBookingFilter === "upcoming" ? "No hay turnos próximos." : "Todavía no hay turnos."}</div>`;
+    return;
+  }
+
+  let lastDay = "";
+  rows.forEach(r => {
+    if (r.d !== lastDay) {
+      lastDay = r.d;
+      const isToday = r.date.getTime() === today.getTime();
+      const head = document.createElement("div");
+      head.className = "admin-day-head";
+      head.textContent = `${isToday ? "Hoy · " : ""}${DOW_LONG[r.date.getDay()]} ${r.d}`;
+      list.appendChild(head);
+    }
+    let created = "";
+    if (r.createdAt) {
+      const c = new Date(r.createdAt);
+      created = `Reservó el ${c.getDate()}/${c.getMonth() + 1} a las ${c.getHours()}:${String(c.getMinutes()).padStart(2, "0")}`;
+    }
+    const studioClass = isSameStudio(r.studio, "Monserrat") ? "monserrat" : "jose-marmol";
+    const card = document.createElement("div");
+    card.className = "admin-booking";
+    card.innerHTML = `
+      <div class="admin-booking-time">${escapeHtml(r.time)}</div>
+      <div class="admin-booking-info">
+        <strong>${escapeHtml(r.name)}</strong>
+        <span>${r.service ? escapeHtml(r.service) + " · " : ""}<em class="studio-tag ${studioClass}">${escapeHtml(r.studio)}</em></span>
+        ${created ? `<small>${escapeHtml(created)}</small>` : ""}
+      </div>
+      <button class="button-release" type="button">Liberar</button>`;
+    card.querySelector(".button-release").addEventListener("click", () => {
+      if (confirm(`¿Liberar el turno de ${r.name === "-" ? "este horario" : r.name} (${r.d} ${r.time})? Quedará disponible para reservar.`)) window.releaseSlot(r.d, r.time, r.studio);
     });
+    list.appendChild(card);
   });
 };
 
@@ -1295,6 +1585,39 @@ document.addEventListener('DOMContentLoaded', async () => {
     });
   });
 
+  // --- Navegación activa + barra inferior estilo app (móvil) ---
+  const TAB_ICONS = {
+    inicio: '<path d="M3 11.5 12 4l9 7.5"/><path d="M5 10v10h5v-6h4v6h5V10"/>',
+    servicios: '<path d="M12 3l1.8 4.7L18.5 9.5l-4.7 1.8L12 16l-1.8-4.7L5.5 9.5l4.7-1.8z"/><path d="M19 15l.8 2.2L22 18l-2.2.8L19 21l-.8-2.2L16 18l2.2-.8z"/>',
+    galeria: '<rect x="3" y="4" width="18" height="16" rx="3"/><circle cx="9" cy="10" r="1.6"/><path d="M21 16l-5-5-8 8"/>',
+    opiniones: '<path d="M12 3.5l2.6 5.4 5.9.8-4.3 4.1 1 5.9L12 16.9 6.8 19.7l1-5.9L3.5 9.7l5.9-.8z"/>',
+    contacto: '<path d="M4 5h16v11H9l-5 4z"/>',
+    reservar: '<rect x="3.5" y="5" width="17" height="15" rx="3"/><path d="M8 3v4M16 3v4M3.5 10h17"/>'
+  };
+  const navLinks = [...document.querySelectorAll('.nav > a')];
+  navLinks.forEach(a => {
+    const key = a.dataset.nav || (a.getAttribute('href') || '').replace('.html', '');
+    const page = key === 'index' ? 'inicio' : key;
+    if (page === currentPage || (currentPage === 'inicio' && key === 'index')) a.classList.add('active');
+  });
+  if (navLinks.length && !document.querySelector('.tabbar')) {
+    const tabbar = document.createElement('nav');
+    tabbar.className = 'tabbar';
+    tabbar.setAttribute('aria-label', 'Navegación principal');
+    navLinks.forEach(a => {
+      const isCta = a.classList.contains('button');
+      const key = isCta ? 'reservar' : (a.dataset.nav || 'inicio');
+      const label = a.textContent.trim().split(' ')[0];
+      const tab = document.createElement('a');
+      tab.href = a.getAttribute('href');
+      if (isCta) tab.classList.add('tab-cta');
+      if (a.classList.contains('active') || (isCta && currentPage === 'reservar')) tab.classList.add('active');
+      tab.innerHTML = `<span class="tab-ico"><svg viewBox="0 0 24 24" aria-hidden="true">${TAB_ICONS[key] || TAB_ICONS.inicio}</svg></span><span class="tab-label">${escapeHtml(label)}</span>`;
+      tabbar.appendChild(tab);
+    });
+    document.body.appendChild(tabbar);
+  }
+
   // --- Botón de Admin en Móvil (Footer) ---
   const footerBottom = document.querySelector('.footer-bottom');
   if (footerBottom) {
@@ -1316,9 +1639,16 @@ document.addEventListener('DOMContentLoaded', async () => {
   // Asegurar que nada sea editable al cargar la página
   document.querySelectorAll('[contenteditable]').forEach(el => el.contentEditable = "false");
   
-  applySavedChanges(); 
-  await loadInitialData();
-  syncWithCloud(); 
+  // La página sigue oculta hasta tener los datos actuales: se pide a la nube (solo lo necesario) y,
+  // si no responde en 2.5 seg, se usa el caché local (y el JSON como último respaldo).
+  applySavedChanges();
+  const cloudOk = await syncWithCloud(false, { timeout: 2500 });
+  if (!cloudOk) {
+    await loadInitialData();
+    applySavedChanges();
+    if (currentPage === "reservar" && window.__miriRenderCal) window.__miriRenderCal();
+  }
+  revealPage();
   startCloudSyncPolling();
   
   // Refrescar cuando el usuario vuelve a la pestaña (botón atrás o cambiar de app)

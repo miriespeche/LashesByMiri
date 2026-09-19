@@ -342,12 +342,12 @@ body.nav-active {
   filter: sepia(0.2) saturate(1.1) brightness(0.9);
 }
 
-.collage-item-1 { grid-column: span 1; grid-row: span 1; background-image: url("https://images.unsplash.com/photo-1519415943484-9fa1873496d4?auto=format&fit=crop&w=800&q=80"); }
-.collage-item-2 { grid-column: span 1; grid-row: span 1; background-image: url("https://images.unsplash.com/photo-1517841905240-472988babdf9?auto=format&fit=crop&w=800&q=80"); }
-.collage-item-3 { grid-column: span 1; grid-row: span 2; background-image: url("https://images.unsplash.com/photo-1515377905703-c4788e51af15?auto=format&fit=crop&w=800&q=80"); }
-.collage-item-4 { grid-column: span 1; grid-row: span 1; background-image: url("https://images.unsplash.com/photo-1515886657613-9f3515b0c78f?auto=format&fit=crop&w=800&q=80"); }
-.collage-item-5 { grid-column: span 1; grid-row: span 1; background-image: url("https://images.unsplash.com/photo-1487412912498-0447578fcca8?auto=format&fit=crop&w=800&q=80"); }
-.collage-item-6 { grid-column: span 1; grid-row: span 1; background-image: url("https://images.unsplash.com/photo-1526047932273-341f2a7631f9?auto=format&fit=crop&w=800&q=80"); }
+.collage-item-1 { grid-column: span 1; grid-row: span 1; background-image: url("https://images.unsplash.com/photo-1519415943484-9fa1873496d4?auto=format&fit=crop&w=1600&q=85"); }
+.collage-item-2 { grid-column: span 1; grid-row: span 1; background-image: url("https://images.unsplash.com/photo-1517841905240-472988babdf9?auto=format&fit=crop&w=1600&q=85"); }
+.collage-item-3 { grid-column: span 1; grid-row: span 2; background-image: url("https://images.unsplash.com/photo-1515377905703-c4788e51af15?auto=format&fit=crop&w=1600&q=85"); }
+.collage-item-4 { grid-column: span 1; grid-row: span 1; background-image: url("https://images.unsplash.com/photo-1515886657613-9f3515b0c78f?auto=format&fit=crop&w=1600&q=85"); }
+.collage-item-5 { grid-column: span 1; grid-row: span 1; background-image: url("https://images.unsplash.com/photo-1487412912498-0447578fcca8?auto=format&fit=crop&w=1600&q=85"); }
+.collage-item-6 { grid-column: span 1; grid-row: span 1; background-image: url("https://images.unsplash.com/photo-1526047932273-341f2a7631f9?auto=format&fit=crop&w=1600&q=85"); }
 
 /* Diseño móvil del collage */
 /* Booking Form Styles */
