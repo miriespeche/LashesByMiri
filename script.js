@@ -554,7 +554,9 @@ const injectAdminUI = () => {
     adminOverlay.querySelector(".admin-body").scrollTop = 0;
   };
   adminOverlay.querySelectorAll(".admin-tab").forEach(b => b.onclick = () => setAdminTab(b.dataset.tab));
-  adminOverlay.addEventListener("click", (e) => { if (e.target === adminOverlay) adminOverlay.style.display = "none"; });
+  // Nota: a propósito NO se cierra al tocar afuera del panel. En el celular hay una franja
+  // de fondo visible arriba del panel que se corre cuando aparece el teclado, y un toque ahí
+  // (por ejemplo al editar un horario) cerraba el panel sin querer. Se cierra solo con la X.
   document.getElementById("adminFilterUpcoming").onclick = () => { adminBookingFilter = "upcoming"; renderAdminBookings(); };
   document.getElementById("adminFilterAll").onclick = () => { adminBookingFilter = "all"; renderAdminBookings(); };
   document.getElementById("adminEnableEdit").onclick = () => { adminOverlay.style.display = "none"; enableVisualEditing(); };
